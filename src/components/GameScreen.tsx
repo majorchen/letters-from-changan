@@ -179,6 +179,21 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
     if (key === 'EVENTS') {
       update.events = value.split(/[、,，]/).map(item => item.trim()).filter(Boolean);
     }
+    if (key === 'SUMMARY' && value.toLowerCase() !== 'none') {
+      update.summary = value;
+    }
+    if (key === 'NPC_MEMORY' && value.toLowerCase() !== 'none') {
+      update.npcMemories = {};
+      for (const rawEntry of value.split(/[;；]/)) {
+        const [name, attitude, fact] = rawEntry.split('|').map(item => item.trim());
+        if (!name || name.toLowerCase() === 'none') continue;
+        update.npcMemories[name] = {
+          attitude: attitude || '中立',
+          lastInteraction: fact || '',
+          knownFacts: fact ? [fact] : [],
+        };
+      }
+    }
     if (key === 'MAILBOX') {
       const mailbox = value.toLowerCase();
       if (mailbox === 'none' || mailbox === 'pending_first_open' || mailbox === 'unread' || mailbox === 'quiet') {

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import { buildSystemPrompt, PlayerState, ROLES, getMailboxState } from '@/lib/prompts';
+import { buildSystemPrompt, PlayerState, ROLES, getMailboxState, getStoryPhase, getStoryTime, STORY_PERIODS } from '@/lib/prompts';
 
 type ClientMessage = {
   role: string;
@@ -27,12 +27,20 @@ function normalizePlayerState(value: unknown): PlayerState | null {
   const state = value as Partial<PlayerState>;
   if (!state.role || !(state.role in ROLES)) return null;
   const mailbox = getMailboxState(state);
+  const storyTime = getStoryTime(state);
   return {
     role: state.role,
     location: typeof state.location === 'string' ? state.location.slice(0, 80) : '长安城门外',
     chapter: typeof state.chapter === 'string' ? state.chapter.slice(0, 60) : 'arrival',
     knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs.filter((item): item is string => typeof item === 'string').slice(0, 20) : [],
     events: Array.isArray(state.events) ? state.events.filter((item): item is string => typeof item === 'string').slice(0, 40) : [],
+    narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary.slice(0, 500) : '',
+    npcMemories: state.npcMemories && typeof state.npcMemories === 'object' ? state.npcMemories : {},
+    storyTime: {
+      day: Number.isFinite(state.storyTime?.day) ? Number(state.storyTime?.day) : storyTime.day,
+      period: state.storyTime?.period && STORY_PERIODS.includes(state.storyTime.period) ? state.storyTime.period : storyTime.period,
+    },
+    storyPhase: state.storyPhase || getStoryPhase(state).phase,
     hasMailbox: mailbox.discovered,
     unreadLetters: mailbox.unread.length,
     mailbox,

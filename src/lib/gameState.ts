@@ -1,4 +1,4 @@
-import { PlayerState, INITIAL_STATE, getMailboxState } from './prompts';
+import { PlayerState, INITIAL_STATE, getMailboxState, advanceStoryTime, getStoryPhase, NpcMemory } from './prompts';
 
 const STORAGE_KEY = 'letters-from-changan-state';
 const HISTORY_KEY = 'letters-from-changan-history';
@@ -31,6 +31,8 @@ export interface NarrativeStateUpdate {
   location?: string;
   npcs?: string[];
   events?: string[];
+  summary?: string;
+  npcMemories?: Record<string, NpcMemory>;
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
 
@@ -84,10 +86,15 @@ function saveSaves(saves: GameSave[]): void {
 
 function normalizePlayerState(state: PlayerState): PlayerState {
   const mailbox = getMailboxState(state);
+  const storyPhase = state.storyPhase || getStoryPhase(state).phase;
   return {
     ...state,
     knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs : [],
     events: Array.isArray(state.events) ? state.events : [],
+    narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary : '',
+    npcMemories: state.npcMemories && typeof state.npcMemories === 'object' ? state.npcMemories : {},
+    storyTime: state.storyTime || INITIAL_STATE.storyTime,
+    storyPhase,
     letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory : [],
     hasMailbox: mailbox.discovered,
     unreadLetters: mailbox.unread.length,
@@ -267,7 +274,10 @@ export function clearGame(): void {
 }
 
 export function updateChapter(state: PlayerState, content: string, narrativeState?: NarrativeStateUpdate): PlayerState {
-  const updated = normalizePlayerState({ ...state, turnCount: (state.turnCount || 0) + 1 });
+  const nextTurnCount = (state.turnCount || 0) + 1;
+  const updated = normalizePlayerState({ ...state, turnCount: nextTurnCount });
+  updated.storyTime = advanceStoryTime(updated);
+  updated.storyPhase = getStoryPhase(updated).phase;
   const addEvent = (event: string) => {
     if (!updated.events.includes(event)) {
       updated.events = [...updated.events, event];
@@ -339,6 +349,26 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
   }
   for (const event of narrativeState?.events || []) {
     if (event && event !== 'none') addEvent(event.slice(0, 60));
+  }
+  if (narrativeState?.summary) {
+    updated.narrativeSummary = narrativeState.summary.slice(0, 260);
+  } else if (!updated.narrativeSummary && content.trim()) {
+    updated.narrativeSummary = content.replace(/\s+/g, ' ').slice(0, 180);
+  }
+  if (narrativeState?.npcMemories) {
+    updated.npcMemories = {
+      ...updated.npcMemories,
+      ...Object.fromEntries(
+        Object.entries(narrativeState.npcMemories).map(([name, memory]) => {
+          const previous = updated.npcMemories[name] || { lastInteraction: '', attitude: '中立', knownFacts: [] };
+          return [name, {
+            lastInteraction: memory.lastInteraction || previous.lastInteraction,
+            attitude: memory.attitude || previous.attitude,
+            knownFacts: Array.from(new Set([...(previous.knownFacts || []), ...(memory.knownFacts || [])])).slice(-8),
+          }];
+        }),
+      ),
+    };
   }
   if (narrativeState?.mailbox === 'pending_first_open') {
     updated.chapter = 'mailbox_found';
