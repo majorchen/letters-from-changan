@@ -70,38 +70,38 @@ export default function StartScreen({ onStart, saves, onContinue }: Props) {
           你有一封跨越千年的信
         </p>
 
-        {hasSaves && (
-          <button
-            onClick={() => setShowSavePicker(true)}
-            className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/30 border border-amber-600/40 text-amber-200 hover:bg-amber-700/50 transition-all animate-pulse-glow backdrop-blur-sm animate-fade-in-up"
-            style={{ animationDelay: '1.2s', animationFillMode: 'both' }}
-          >
-            继续旅程
-          </button>
-        )}
-
-        {/* Role selection */}
-        <div className="text-amber-400/50 text-xs mb-3 tracking-widest animate-fade-in-up" style={{ animationDelay: hasSaves ? '1.4s' : '1.2s', animationFillMode: 'both' }}>
-          {hasSaves ? '— 或开始新的旅程 —' : '— 选择你的身份 —'}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {Object.entries(ROLES).map(([key, role], idx) => (
+        <div className="animate-fade-in-up" style={{ animationDelay: '1.55s', animationFillMode: 'both' }}>
+          {hasSaves && (
             <button
-              key={key}
-              onClick={() => onStart(key)}
-              className="group p-4 rounded-xl border border-amber-700/25 bg-stone-900/60 backdrop-blur-sm hover:bg-amber-900/40 hover:border-amber-500/40 transition-all text-left animate-fade-in-up"
-              style={{ animationDelay: `${(hasSaves ? 1.5 : 1.3) + idx * 0.1}s`, animationFillMode: 'both' }}
+              onClick={() => setShowSavePicker(true)}
+              className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/30 border border-amber-600/40 text-amber-200 hover:bg-amber-700/50 transition-all animate-pulse-glow backdrop-blur-sm"
             >
-              <div className="text-2xl mb-1">{role.emoji}</div>
-              <div className="text-amber-200 font-medium text-sm">{role.name}</div>
-              <div className="text-amber-500/40 text-xs mt-0.5">{role.desc}</div>
+              继续旅程
             </button>
-          ))}
-        </div>
+          )}
 
-        <p className="text-amber-800/30 text-xs mt-6 animate-fade-in-up" style={{ animationDelay: '2s', animationFillMode: 'both' }}>
-          AI 驱动 · 每次游戏都是独一无二的故事
-        </p>
+          {/* Role selection */}
+          <div className="text-amber-400/50 text-xs mb-3 tracking-widest">
+            {hasSaves ? '— 或开始新的旅程 —' : '— 选择你的身份 —'}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.entries(ROLES).map(([key, role]) => (
+              <button
+                key={key}
+                onClick={() => onStart(key)}
+                className="group p-4 rounded-xl border border-amber-700/25 bg-stone-900/60 backdrop-blur-sm hover:bg-amber-900/40 hover:border-amber-500/40 transition-all text-left"
+              >
+                <div className="text-2xl mb-1">{role.emoji}</div>
+                <div className="text-amber-200 font-medium text-sm">{role.name}</div>
+                <div className="text-amber-500/40 text-xs mt-0.5">{role.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          <p className="text-amber-800/30 text-xs mt-6">
+            AI 驱动 · 每次游戏都是独一无二的故事
+          </p>
+        </div>
       </div>
 
       {showSavePicker && (
