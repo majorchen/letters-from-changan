@@ -33,6 +33,7 @@ export interface NarrativeStateUpdate {
   events?: string[];
   summary?: string;
   npcMemories?: Record<string, NpcMemory>;
+  inputMode?: 'options' | 'free';
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
 
@@ -95,6 +96,9 @@ function normalizePlayerState(state: PlayerState): PlayerState {
     npcMemories: state.npcMemories && typeof state.npcMemories === 'object' ? state.npcMemories : {},
     storyTime: state.storyTime || INITIAL_STATE.storyTime,
     storyPhase,
+    awaitingFreeInput: Boolean(state.awaitingFreeInput),
+    freeInputCount: state.freeInputCount || 0,
+    lastFreeInputTurn: state.lastFreeInputTurn || 0,
     letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory : [],
     hasMailbox: mailbox.discovered,
     unreadLetters: mailbox.unread.length,
@@ -276,6 +280,9 @@ export function clearGame(): void {
 export function updateChapter(state: PlayerState, content: string, narrativeState?: NarrativeStateUpdate): PlayerState {
   const nextTurnCount = (state.turnCount || 0) + 1;
   const updated = normalizePlayerState({ ...state, turnCount: nextTurnCount });
+  if (state.awaitingFreeInput) {
+    updated.awaitingFreeInput = false;
+  }
   updated.storyTime = advanceStoryTime(updated);
   updated.storyPhase = getStoryPhase(updated).phase;
   const addEvent = (event: string) => {
@@ -369,6 +376,16 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
         }),
       ),
     };
+  }
+  if (narrativeState?.inputMode === 'free') {
+    const farEnough = updated.turnCount - (updated.lastFreeInputTurn || 0) >= 12;
+    if ((updated.freeInputCount || 0) < 3 && farEnough) {
+      updated.awaitingFreeInput = true;
+      updated.freeInputCount = (updated.freeInputCount || 0) + 1;
+      updated.lastFreeInputTurn = updated.turnCount;
+    }
+  } else if (narrativeState?.inputMode === 'options') {
+    updated.awaitingFreeInput = false;
   }
   if (narrativeState?.mailbox === 'pending_first_open') {
     updated.chapter = 'mailbox_found';

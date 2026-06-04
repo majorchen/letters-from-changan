@@ -194,6 +194,12 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
         };
       }
     }
+    if (key === 'INPUT') {
+      const inputMode = value.toLowerCase();
+      if (inputMode === 'options' || inputMode === 'free') {
+        update.inputMode = inputMode;
+      }
+    }
     if (key === 'MAILBOX') {
       const mailbox = value.toLowerCase();
       if (mailbox === 'none' || mailbox === 'pending_first_open' || mailbox === 'unread' || mailbox === 'quiet') {
@@ -462,7 +468,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 4. Options (from raw) — stored on the message for persistence
       const extractedOptions = extractOptions(rawContent);
-      const opts = ensureMailboxOption(extractedOptions.length > 0 ? extractedOptions : fallbackOptions(updated, rawContent, text), updated);
+      const opts = updated.awaitingFreeInput
+        ? []
+        : ensureMailboxOption(extractedOptions.length > 0 ? extractedOptions : fallbackOptions(updated, rawContent, text), updated);
 
       // 5. Display cleaned content + options on message
       assistantMsg.content = cleanContent;
@@ -766,12 +774,17 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="flex-none px-4 pb-4 pt-2 z-10">
+        {gameState.awaitingFreeInput && !isStreaming && (
+          <div className="max-w-lg mx-auto pb-2 text-center text-xs text-amber-400/45">
+            这一刻，长安在等你亲口回答。
+          </div>
+        )}
         <div className="flex gap-2 items-end max-w-lg mx-auto">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="说点什么..."
+            placeholder={gameState.awaitingFreeInput ? '写下你的回应...' : '说点什么...'}
             rows={1}
             disabled={isStreaming}
             className="flex-1 bg-stone-800/60 border border-amber-700/30 rounded-xl px-4 py-2.5 text-sm text-amber-100/90 placeholder:text-amber-600/40 resize-none focus:outline-none focus:border-amber-600/50 disabled:opacity-50"
