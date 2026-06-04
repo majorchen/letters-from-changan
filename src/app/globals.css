@@ -54,8 +54,8 @@ body {
 
 /* Text fade mask for scrolling over image */
 .text-fade-mask {
-  mask-image: linear-gradient(to bottom, transparent 10%, black 25%, black 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 10%, black 25%, black 100%);
+  mask-image: linear-gradient(to bottom, transparent 15%, black 30%, black 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 15%, black 30%, black 100%);
 }
 
 @keyframes fadeInUp {
