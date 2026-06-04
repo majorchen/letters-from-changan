@@ -126,6 +126,13 @@ function fallbackSceneFromNarrative(state: PlayerState, content: string): string
   return `Tang Dynasty Chang an, ${state.location}, a ${role} in the current story moment: ${excerpt}, cinematic narrative scene, warm historical atmosphere`;
 }
 
+function latestSceneFromMessages(messages: ChatMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].sceneImage) return messages[i].sceneImage || null;
+  }
+  return null;
+}
+
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
   const [gamePhase, setGamePhase] = useState<'prologue' | 'typewriter' | 'playing'>('prologue');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -166,6 +173,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const history = loadChatHistory();
     if (history.length > 0) {
       setMessages(history);
+      const latestScene = latestSceneFromMessages(history);
+      if (latestScene) setSceneImage(latestScene);
       messageCounterRef.current = history.filter(m => m.role === 'user').length;
     }
   }, []);
@@ -175,7 +184,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const history = loadChatHistory();
     if (history.length > 0) {
       initRef.current = true;
-      setSceneImage(ROLE_SCENES[gameState.role] || ROLE_SCENES.scholar);
+      setSceneImage(latestSceneFromMessages(history) || ROLE_SCENES[gameState.role] || ROLE_SCENES.scholar);
       setGamePhase('playing');
     } else {
       // New game — reset module-level state
@@ -464,6 +473,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const cache = loadSceneCache();
     if (cache[cacheKey]) {
       setSceneImage(cache[cacheKey]);
+      persistLatestSceneImage(cache[cacheKey]);
       return;
     }
     setImageLoading(true);
@@ -476,11 +486,26 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const data = await res.json();
       if (data.url) {
         setSceneImage(data.url);
+        persistLatestSceneImage(data.url);
         cache[cacheKey] = data.url;
         saveSceneCache(cache);
       }
     } catch { /* silently fail */ }
     setImageLoading(false);
+  }
+
+  function persistLatestSceneImage(url: string) {
+    const currentMessages = messagesRef.current;
+    for (let i = currentMessages.length - 1; i >= 0; i--) {
+      if (currentMessages[i].role === 'assistant') {
+        const updatedMessages = [...currentMessages];
+        updatedMessages[i] = { ...updatedMessages[i], sceneImage: url };
+        messagesRef.current = updatedMessages;
+        setMessages(updatedMessages);
+        saveChatHistory(updatedMessages);
+        return;
+      }
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -566,12 +591,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-300/70 text-xs font-medium">{gameState.location}</div>
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
-        <div className="justify-self-end flex items-center gap-2 min-w-10">
-          {gameState.letterHistory.length > 0 && (
-            <button onClick={() => setShowLetterBox(true)} className="text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
-              📜
-            </button>
-          )}
+        <div className="justify-self-end flex min-w-10 items-center justify-end">
+          <button onClick={() => setShowLetterBox(true)} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
+            📜
+          </button>
         </div>
       </div>
 

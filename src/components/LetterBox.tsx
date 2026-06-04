@@ -17,8 +17,10 @@ export default function LetterBox({ letters, onClose }: Props) {
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
         <div className="relative letter-paper rounded-lg p-8 max-w-md mx-4 text-center">
-          <div className="font-handwriting text-xl text-amber-800/60">信匣空空如也</div>
-          <div className="text-amber-700/40 text-sm mt-2">还没有收到过信件</div>
+          <div className="font-handwriting text-xl leading-relaxed text-amber-900/75">
+            长安万户灯，尚无一纸来。
+          </div>
+          <div className="text-amber-700/45 text-sm mt-3">信匣里还没有留下字迹</div>
           <button onClick={onClose} className="mt-4 px-4 py-2 text-amber-800/50 text-sm hover:text-amber-800/80">
             关闭
           </button>
