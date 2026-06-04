@@ -14,7 +14,7 @@ export default function StartScreen({ onStart, hasSave, onContinue }: Props) {
       {/* Background image with slow zoom animation */}
       <div className="absolute inset-0 animate-slow-zoom">
         <img
-          src="/bg-changan.jpg"
+          src="/bg-changan.webp"
           alt=""
           className="w-full h-full object-cover"
         />
