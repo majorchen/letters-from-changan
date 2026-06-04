@@ -4,6 +4,20 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "来信长安 | Letters from Chang'an",
   description: "你有一封跨越千年的信。一款AI驱动的无限流互动叙事体验。",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "来信长安",
+  },
 };
 
 export const viewport: Viewport = {
