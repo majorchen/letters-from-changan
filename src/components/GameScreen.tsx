@@ -374,31 +374,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     );
   }
 
-  // Main game — literary text layout
+  // Main game — scroll-over-image layout
   return (
-    <div className="h-full flex flex-col bg-stone-950">
-      {/* Header bar */}
-      <div className="flex-none px-4 py-3 bg-stone-950 border-b border-amber-900/10 flex items-center justify-between z-10">
-        <button onClick={onExit} className="text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
-          ← 离开
-        </button>
-        <div className="text-center">
-          <div className="text-amber-300/70 text-sm font-medium">{gameState.location}</div>
-          <div className="text-amber-500/30 text-xs">天宝元年 · {roleInfo?.name || '旅人'}</div>
-        </div>
-        <div className="flex items-center gap-3">
-          {gameState.letterHistory.length > 0 && (
-            <button onClick={() => setShowLetterBox(true)} className="text-amber-400/40 hover:text-amber-400 text-base" title="信匣">
-              📜
-            </button>
-          )}
-          <span className="text-amber-500/30 text-xs">{gameState.actionsToday}/10</span>
-        </div>
-      </div>
-
-      {/* Scene image — compact, between header and text */}
+    <div className="h-full flex flex-col bg-stone-950 relative">
+      {/* Scene image — absolute, behind everything */}
       {sceneImage && (
-        <div className="flex-none h-[22vh] relative">
+        <div className="absolute inset-x-0 top-0 h-[35vh] z-0 pointer-events-none">
           <img
             src={sceneImage}
             alt=""
@@ -408,14 +389,35 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
         </div>
       )}
-      {!sceneImage && imageLoading && (
-        <div className="flex-none h-10 flex items-center justify-center">
+      {imageLoading && !sceneImage && (
+        <div className="absolute inset-x-0 top-4 z-30 text-center">
           <span className="text-amber-600/20 text-xs">场景浮现中...</span>
         </div>
       )}
 
-      {/* Text area — with top fade-out effect */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4 text-fade-mask">
+      {/* Header bar — compact, translucent, on top of image */}
+      <div className="flex-none px-4 py-1.5 bg-stone-950/50 backdrop-blur-sm flex items-center justify-between z-20 relative">
+        <button onClick={onExit} className="text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
+          ← 离开
+        </button>
+        <div className="text-center">
+          <div className="text-amber-300/70 text-xs font-medium">{gameState.location}</div>
+          <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          {gameState.letterHistory.length > 0 && (
+            <button onClick={() => setShowLetterBox(true)} className="text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
+              📜
+            </button>
+          )}
+          <span className="text-amber-500/30 text-[10px]">{gameState.actionsToday}/10</span>
+        </div>
+      </div>
+
+      {/* Text area — on top of image, with top fade mask */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4 z-10 relative text-fade-mask">
+        {/* Spacer so initial content starts below the image */}
+        <div className="h-[28vh]" />
 
         <div className="max-w-lg mx-auto space-y-5">
           {messages.map((msg, i) => (
