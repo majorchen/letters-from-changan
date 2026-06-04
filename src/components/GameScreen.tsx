@@ -19,6 +19,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [letterContent, setLetterContent] = useState('');
   const [letterLoading, setLetterLoading] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
+  const [sceneImage, setSceneImage] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initRef = useRef(false);
@@ -62,6 +64,17 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }, [gameState]);
 
   async function sendMessage(text: string, isSystem = false) {
+    if (!isSystem && gameState.actionsToday >= 10) {
+      const limitMsg: ChatMessage = {
+        role: 'system',
+        content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。',
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, limitMsg]);
+      saveChatHistory([...messages, limitMsg]);
+      return;
+    }
+
     const userMsg: ChatMessage = {
       role: 'user',
       content: text,
@@ -138,6 +151,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // Update game state based on response
       const updated = updateChapter(gameState, fullContent);
+
+      // Generate scene image for key moments
+      const sceneKeywords = ['城门', '西市', '东市', '客栈', '邮箱', '长安', '朱雀门', '街巷'];
+      const shouldGenImage = sceneKeywords.some(kw => fullContent.includes(kw)) && !imageLoading && Math.random() > 0.5;
+      if (shouldGenImage) {
+        generateSceneImage(fullContent);
+      }
 
       // Check if mailbox was just found
       if (!gameState.hasMailbox && updated.hasMailbox) {
@@ -222,13 +242,37 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
     setShowLetter(false);
 
-    // Schedule next letter (after a few interactions)
-    setTimeout(() => {
-      const withLetter = { ...updated, unreadLetters: 1 };
-      onStateChange(withLetter);
-      saveGameState(withLetter);
-      setShowMailbox(true);
-    }, 60000); // 1 minute for MVP, would be longer in production
+    // Schedule next letter after a few more interactions
+    const interactionCount = { current: 0 };
+    const checkInterval = setInterval(() => {
+      interactionCount.current++;
+      if (interactionCount.current >= 3) {
+        clearInterval(checkInterval);
+        const withLetter = { ...updated, unreadLetters: 1 };
+        onStateChange(withLetter);
+        saveGameState(withLetter);
+        setShowMailbox(true);
+      }
+    }, 20000);
+  }
+
+  async function generateSceneImage(narration: string) {
+    setImageLoading(true);
+    try {
+      const scene = narration.slice(0, 200);
+      const res = await fetch('/api/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scene: `Tang Dynasty Chang'an scene: ${scene}` }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        setSceneImage(data.url);
+      }
+    } catch {
+      // silently fail
+    }
+    setImageLoading(false);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -263,6 +307,30 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   return (
     <div className="h-full flex flex-col relative">
+      {/* Scene image */}
+      {sceneImage && (
+        <div className="relative flex-none">
+          <img
+            src={sceneImage}
+            alt="长安场景"
+            className="w-full h-40 object-cover opacity-80"
+            onError={() => setSceneImage(null)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
+          <button
+            onClick={() => setSceneImage(null)}
+            className="absolute top-2 right-2 text-white/40 hover:text-white/80 text-xs bg-black/30 rounded-full w-6 h-6 flex items-center justify-center"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {imageLoading && (
+        <div className="flex-none h-8 flex items-center justify-center bg-amber-900/10">
+          <span className="text-amber-600/40 text-xs">场景浮现中...</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex-none px-4 py-3 bg-gradient-to-b from-stone-900 to-stone-900/95 border-b border-amber-900/20 flex items-center justify-between">
         <button onClick={onExit} className="text-amber-600/50 text-xs hover:text-amber-400">
