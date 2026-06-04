@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 
-const client = new OpenAI({
-  apiKey: process.env.AGNES_API_KEY || '',
-  baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
-});
+function getClient() {
+  return new OpenAI({
+    apiKey: process.env.AGNES_API_KEY || '',
+    baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+  });
+}
 
 export async function POST(req: NextRequest) {
   const { messages, systemPrompt } = await req.json();
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest) {
   ];
 
   try {
-    const stream = await client.chat.completions.create({
+    const stream = await getClient().chat.completions.create({
       model: 'gpt-4o',
       messages: allMessages,
       stream: true,

@@ -2,10 +2,12 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { LETTER_WRITER_PROMPT } from '@/lib/prompts';
 
-const client = new OpenAI({
-  apiKey: process.env.AGNES_API_KEY || '',
-  baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
-});
+function getClient() {
+  return new OpenAI({
+    apiKey: process.env.AGNES_API_KEY || '',
+    baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+  });
+}
 
 export async function POST(req: NextRequest) {
   const { playerReply, letterHistory } = await req.json();
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const response = await client.chat.completions.create({
+    const response = await getClient().chat.completions.create({
       model: 'gpt-4o',
       messages,
       temperature: 0.9,
