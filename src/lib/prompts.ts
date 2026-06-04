@@ -110,6 +110,7 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
   const storyTime = getStoryTime(playerState);
   const storyPhase = getStoryPhase(playerState);
   const anchorFragments = formatAnchorFragments(playerState);
+  const sliceOfLifeGuide = getSliceOfLifeGuide(playerState);
   return `${WORLD_SETTING}
 
 ## 当前玩家信息
@@ -138,10 +139,23 @@ ${getChapterGuide(playerState)}
 ## 节奏与时辰要求
 ${storyPhase.guide}
 描写必须体现当前时辰的光线、声音、气味或人群变化，但不要机械报时。
+${sliceOfLifeGuide}
 
 ## 自由输入控制
 默认必须给选项并写 INPUT: options。只有在林深提出私人问题、NPC直视玩家等待回答、或锚点矛盾需要玩家亲自表态时，才可以写 INPUT: free 并不给选项。
 如果自由输入次数已达到3次，或距离上次自由输入太近，不要再写 INPUT: free。`;
+}
+
+function getSliceOfLifeGuide(state: PlayerState): string {
+  const turn = state.turnCount || 0;
+  const phase = getStoryPhase(state).phase;
+  if (phase === "act3") {
+    return "第三幕必须让日常里渗出不安：边境军报、物价波动、有人低声谈范阳、有人提前离京。不要直接解释安史之乱，只让玩家感到长安的灯火并不稳。";
+  }
+  if (turn > 0 && turn % 9 === 0) {
+    return "本轮优先写一个低推进度的日常沉浸场景：坐下吃饭、看人来人往、听王掌柜骂伙计、听远处乐声。可以不给大事件，只让长安像真正生活着。";
+  }
+  return "在推进剧情时保留日常背景：NPC有自己的生计、疲惫、闲话和小动作，不要让所有人都围着玩家转。";
 }
 
 function formatRecentLetters(letterHistory: PlayerState["letterHistory"]): string {
