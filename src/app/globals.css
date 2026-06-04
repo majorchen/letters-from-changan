@@ -21,7 +21,8 @@ body {
 }
 
 .font-handwriting {
-  font-family: var(--font-handwriting), 'STKaiti', 'KaiTi', cursive;
+  font-family: var(--font-serif), 'Songti SC', 'SimSun', serif;
+  font-weight: 700;
 }
 
 .letter-paper {
