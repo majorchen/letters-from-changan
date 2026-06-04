@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter } from '@/lib/gameState';
-import { PlayerState, buildSystemPrompt } from '@/lib/prompts';
+import { PlayerState, buildSystemPrompt, ROLES } from '@/lib/prompts';
 import LetterModal from './LetterModal';
 
 interface Props {
@@ -10,6 +10,17 @@ interface Props {
   onStateChange: (state: PlayerState) => void;
   onExit: () => void;
 }
+
+const OPENING_NARRATIONS: Record<string, string> = {
+  merchant: '你牵着一匹瘦马，站在朱雀门外。身上的包裹里装着从江南带来的丝绸样品，那是你全部的本钱。长安城的城墙高耸入云，城门洞开处，人流如潮水般涌动。一个胡商的驼铃声从远处传来，混着烤饼的焦香和马粪的气味。守门的兵卒扫了你一眼，见你商人打扮，便挥了挥手——"进去吧。"\n\n你深吸一口气，踏入了这座百万人的城市。',
+  musician: '你背着一把旧琵琶，站在朱雀门外。琴弦是上个月在洛阳新换的，音色还算清亮。长安城的城墙遮住了半边天，城门口一个卖糖人的老头正在吆喝，声音被风吹得断断续续。你的手指无意识地在琴颈上滑动——这是你紧张时的习惯。守门的兵卒看了看你的琵琶，咧嘴一笑——"又一个来长安讨生活的乐师，进去吧。"\n\n你点点头，抱紧琵琶，走进了城门。',
+  wanderer: '你按了按腰间的短刀，站在朱雀门外。刀是好刀，但刀鞘上的漆已经磨得斑驳。长安城的城墙像一头蹲伏的巨兽，城门口排着长队——商人、僧侣、操着各种口音的旅人。守门的兵卒目光锐利，在你身上停留了一瞬，盯着你腰间的刀。你不动声色地把衣襟拉低了些。"做什么的？""路过。""长安不缺游侠，别惹事。"\n\n你没回话，侧身挤进了人群。',
+  scholar: '你抖了抖衣袖上的尘土，站在朱雀门外。怀里揣着一卷自己写的策论，纸张边角已经被汗水浸软。长安城——你在书里读过无数遍的名字，此刻就矗立在眼前。城门比你想象的还要高，门洞里回荡着嘈杂的人声。一个守门的年轻兵卒看了看你的书生打扮，态度还算客气——"来长安赶考的？""不，来长安……看看。"\n\n他有些意外，但还是让开了路。你理了理衣冠，走了进去。',
+};
+
+// Key story moments that deserve an image
+const SCENE_TRIGGERS = ['第一次进入', '客栈', '邮箱发光', '西市', '东市', '收到信'];
+let messageCounter = 0;
 
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -31,40 +42,46 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }, 50);
   }, []);
 
-  // Load history on mount
   useEffect(() => {
     const history = loadChatHistory();
     if (history.length > 0) {
       setMessages(history);
+      messageCounter = history.filter(m => m.role === 'user').length;
     }
   }, []);
 
-  // Auto-start narration
+  // Fix #1: Fixed opening narration instead of API call
   useEffect(() => {
     if (initRef.current) return;
     const history = loadChatHistory();
     if (history.length === 0) {
       initRef.current = true;
-      sendMessage('（我来到了长安城门前）', true);
+      const opening = OPENING_NARRATIONS[gameState.role] || OPENING_NARRATIONS.scholar;
+      const openingMsg: ChatMessage = {
+        role: 'assistant',
+        content: opening + '\n\n眼前是宽阔的朱雀大街，人群熙攘。你需要先找个落脚的地方。\n\n【选项A】沿着大街往北走，找一家客栈安顿\n【选项B】先去西市转转，打听行情\n【选项C】在城门附近随便看看',
+        timestamp: Date.now(),
+      };
+      setMessages([openingMsg]);
+      saveChatHistory([openingMsg]);
+      // Generate opening scene image
+      generateSceneImage('The grand Zhuque Gate of Tang Dynasty Chang\'an, bustling crowd entering the massive city gate, merchants with camels, guards in armor, warm golden sunlight');
     } else {
       initRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-  // Check if mailbox should glow
   useEffect(() => {
     if (gameState.hasMailbox && gameState.unreadLetters > 0) {
       setShowMailbox(true);
     }
   }, [gameState]);
 
-  async function sendMessage(text: string, isSystem = false) {
-    if (!isSystem && gameState.actionsToday >= 10) {
+  async function sendMessage(text: string) {
+    if (gameState.actionsToday >= 10) {
       const limitMsg: ChatMessage = {
         role: 'system',
         content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。',
@@ -75,36 +92,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       return;
     }
 
-    const userMsg: ChatMessage = {
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
-    };
+    messageCounter++;
 
-    const newMessages = isSystem ? [...messages] : [...messages, userMsg];
-    if (!isSystem) {
-      setMessages(newMessages);
-      setInput('');
-    }
-
+    const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput('');
     setIsStreaming(true);
 
-    const assistantMsg: ChatMessage = {
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-    };
-
+    const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: Date.now() };
     const systemPrompt = buildSystemPrompt(gameState.role, gameState);
-
     const apiMessages = newMessages
       .filter(m => m.role !== 'system')
       .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
-
-    if (isSystem) {
-      apiMessages.push({ role: 'user', content: text });
-    }
 
     try {
       const res = await fetch('/api/chat', {
@@ -115,19 +116,14 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-
       if (!reader) throw new Error('No reader');
 
       let fullContent = '';
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
-
-        for (const line of lines) {
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') continue;
@@ -136,31 +132,28 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               if (parsed.content) {
                 fullContent += parsed.content;
                 assistantMsg.content = fullContent;
-                if (isSystem) {
-                  setMessages([...newMessages, { ...assistantMsg }]);
-                } else {
-                  setMessages([...newMessages, { ...assistantMsg }]);
-                }
+                setMessages([...newMessages, { ...assistantMsg }]);
               }
-            } catch {
-              // skip
-            }
+            } catch { /* skip */ }
           }
         }
       }
 
-      // Update game state based on response
       const updated = updateChapter(gameState, fullContent);
 
-      // Generate scene image for key moments
-      const sceneKeywords = ['城门', '西市', '东市', '客栈', '邮箱', '长安', '朱雀门', '街巷'];
-      const shouldGenImage = sceneKeywords.some(kw => fullContent.includes(kw)) && !imageLoading && Math.random() > 0.5;
-      if (shouldGenImage) {
-        generateSceneImage(fullContent);
+      // Fix #4: Only generate image on key story moments (every 5th message or scene change)
+      if (messageCounter === 1 || messageCounter % 5 === 0 || updated.chapter !== gameState.chapter) {
+        const sceneDesc = fullContent.slice(0, 150).replace(/【.*?】/g, '');
+        generateSceneImage(`Tang Dynasty Chang'an, ${sceneDesc}`);
       }
 
-      // Check if mailbox was just found
+      // Fix #5: Mailbox triggers based on message count, not random
       if (!gameState.hasMailbox && updated.hasMailbox) {
+        updated.unreadLetters = 1;
+        setShowMailbox(true);
+      }
+      // Letter arrives every 5 messages after first letter
+      if (updated.chapter === 'letter_replied' && messageCounter % 5 === 0) {
         updated.unreadLetters = 1;
         setShowMailbox(true);
       }
@@ -168,15 +161,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       onStateChange(updated);
       saveGameState(updated);
 
-      const finalMessages = isSystem
-        ? [...newMessages, { ...assistantMsg, content: fullContent }]
-        : [...newMessages, { ...assistantMsg, content: fullContent }];
+      const finalMessages = [...newMessages, { ...assistantMsg, content: fullContent }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
     } catch (err) {
       assistantMsg.content = '（长安城的喧嚣声突然安静了一瞬...请再试一次）';
-      const errorMessages = [...newMessages, assistantMsg];
-      setMessages(errorMessages);
+      setMessages([...newMessages, assistantMsg]);
       console.error(err);
     }
 
@@ -189,25 +179,25 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox(false);
 
     try {
+      // Fix #6: Always pass full letter history to avoid duplicate content
+      const currentHistory = gameState.letterHistory || [];
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerReply: null,
-          letterHistory: gameState.letterHistory,
+          letterHistory: currentHistory,
         }),
       });
       const data = await res.json();
-      setLetterContent(data.content || '（信纸上的字迹模糊不清...）');
+      const content = data.content || '（信纸上的字迹模糊不清...）';
+      setLetterContent(content);
 
       const updated = {
         ...gameState,
         unreadLetters: 0,
         chapter: gameState.chapter === 'mailbox_found' ? 'first_letter_read' : gameState.chapter,
-        letterHistory: [
-          ...gameState.letterHistory,
-          { from: 'linShen', content: data.content, timestamp: Date.now() },
-        ],
+        letterHistory: [...currentHistory, { from: 'linShen', content, timestamp: Date.now() }],
       };
       onStateChange(updated);
       saveGameState(updated);
@@ -218,60 +208,36 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   async function handleReply(reply: string) {
-    // Save player's reply to letter history
     const updated = {
       ...gameState,
       chapter: 'letter_replied',
-      letterHistory: [
-        ...gameState.letterHistory,
-        { from: 'player', content: reply, timestamp: Date.now() },
-      ],
+      letterHistory: [...gameState.letterHistory, { from: 'player', content: reply, timestamp: Date.now() }],
     };
     onStateChange(updated);
     saveGameState(updated);
 
-    // Add a system message about the reply
     const replyMsg: ChatMessage = {
       role: 'system',
-      content: `📮 你将回信投入了邮箱。信纸在金光中消失了。`,
+      content: '📮 你将回信投入了邮箱。信纸在金光中消失了。',
       timestamp: Date.now(),
     };
     const newMessages = [...messages, replyMsg];
     setMessages(newMessages);
     saveChatHistory(newMessages);
-
     setShowLetter(false);
-
-    // Schedule next letter after a few more interactions
-    const interactionCount = { current: 0 };
-    const checkInterval = setInterval(() => {
-      interactionCount.current++;
-      if (interactionCount.current >= 3) {
-        clearInterval(checkInterval);
-        const withLetter = { ...updated, unreadLetters: 1 };
-        onStateChange(withLetter);
-        saveGameState(withLetter);
-        setShowMailbox(true);
-      }
-    }, 20000);
   }
 
-  async function generateSceneImage(narration: string) {
+  async function generateSceneImage(scene: string) {
     setImageLoading(true);
     try {
-      const scene = narration.slice(0, 200);
       const res = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scene: `Tang Dynasty Chang'an scene: ${scene}` }),
+        body: JSON.stringify({ scene }),
       });
       const data = await res.json();
-      if (data.url) {
-        setSceneImage(data.url);
-      }
-    } catch {
-      // silently fail
-    }
+      if (data.url) setSceneImage(data.url);
+    } catch { /* silently fail */ }
     setImageLoading(false);
   }
 
@@ -288,101 +254,85 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
-  // Quick action buttons based on game state
   function getQuickActions(): string[] {
     if (gameState.chapter === 'arrival') {
-      if (gameState.location === '长安城门外') {
-        return ['走进城门', '向守门兵打听', '四处张望'];
-      }
+      if (gameState.location === '长安城门外') return ['找一家客栈', '去西市转转', '四处看看'];
       return ['找一间客栈', '去西市看看', '随便走走'];
     }
-    if (gameState.chapter === 'mailbox_found') {
-      return ['打开邮箱看看', '先不管它', '仔细端详这个陶器'];
-    }
-    if (gameState.hasMailbox && gameState.unreadLetters > 0) {
-      return ['查看邮箱', '继续探索', '找人聊聊'];
-    }
+    if (gameState.chapter === 'mailbox_found') return ['打开邮箱看看', '先不管它', '仔细端详这个陶器'];
+    if (gameState.hasMailbox && gameState.unreadLetters > 0) return ['查看邮箱', '继续探索', '找人聊聊'];
     return ['四处走走', '找人聊聊', '回客栈休息'];
   }
 
+  const roleInfo = ROLES[gameState.role];
+
   return (
     <div className="h-full flex flex-col relative">
-      {/* Scene image */}
-      {sceneImage && (
-        <div className="relative flex-none">
-          <img
-            src={sceneImage}
-            alt="长安场景"
-            className="w-full h-40 object-cover opacity-80"
-            onError={() => setSceneImage(null)}
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
-          <button
-            onClick={() => setSceneImage(null)}
-            className="absolute top-2 right-2 text-white/40 hover:text-white/80 text-xs bg-black/30 rounded-full w-6 h-6 flex items-center justify-center"
-          >
-            ×
-          </button>
-        </div>
-      )}
-      {imageLoading && (
-        <div className="flex-none h-8 flex items-center justify-center bg-amber-900/10">
-          <span className="text-amber-600/40 text-xs">场景浮现中...</span>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex-none px-4 py-3 bg-gradient-to-b from-stone-900 to-stone-900/95 border-b border-amber-900/20 flex items-center justify-between">
+      {/* Header with location */}
+      <div className="flex-none px-4 py-3 bg-gradient-to-b from-stone-900 to-stone-900/95 border-b border-amber-900/20 flex items-center justify-between z-10">
         <button onClick={onExit} className="text-amber-600/50 text-xs hover:text-amber-400">
           ← 离开
         </button>
         <div className="text-center">
           <div className="text-amber-300/80 text-sm font-medium">{gameState.location}</div>
-          <div className="text-amber-600/40 text-xs">天宝元年</div>
+          <div className="text-amber-600/40 text-xs">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
-        <div className="text-amber-600/40 text-xs">
-          {gameState.actionsToday}/10
-        </div>
+        <div className="text-amber-600/40 text-xs">{gameState.actionsToday}/10</div>
       </div>
 
-      {/* Chat area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-4 py-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`animate-fade-in-up ${
-              msg.role === 'user'
-                ? 'flex justify-end'
-                : msg.role === 'system'
-                ? 'flex justify-center'
-                : 'flex justify-start'
-            }`}
-          >
-            {msg.role === 'system' ? (
-              <div className="text-amber-500/50 text-xs text-center px-4 py-2 bg-amber-900/10 rounded-full">
-                {msg.content}
-              </div>
-            ) : msg.role === 'user' ? (
-              <div className="max-w-[80%] bg-amber-800/25 border border-amber-700/20 rounded-2xl rounded-br-md px-4 py-2.5 text-amber-100/90 text-sm">
-                {msg.content}
-              </div>
-            ) : (
-              <div className="max-w-[85%] bg-stone-800/60 border border-stone-700/30 rounded-2xl rounded-bl-md px-4 py-3 text-amber-100/80 text-sm leading-relaxed whitespace-pre-wrap">
-                {msg.content}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
-          <div className="flex justify-start">
-            <div className="bg-stone-800/60 border border-stone-700/30 rounded-2xl px-4 py-3 flex gap-1">
-              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-            </div>
+      {/* Fix #2: Chat area with scene image as background */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Scene image as background */}
+        {sceneImage && (
+          <div className="absolute inset-x-0 top-0 h-60 z-0 pointer-events-none">
+            <img src={sceneImage} alt="" className="w-full h-full object-cover" onError={() => setSceneImage(null)} />
+            <div className="absolute inset-0 bg-gradient-to-b from-stone-950/30 via-stone-950/60 to-stone-950" />
           </div>
         )}
+        {imageLoading && !sceneImage && (
+          <div className="absolute inset-x-0 top-0 h-8 flex items-center justify-center z-0">
+            <span className="text-amber-600/30 text-xs">场景浮现中...</span>
+          </div>
+        )}
+
+        {/* Chat messages */}
+        <div ref={scrollRef} className="absolute inset-0 overflow-y-auto chat-scroll px-4 py-4 space-y-4 z-10">
+          {/* Spacer when scene image is showing */}
+          {sceneImage && <div className="h-36" />}
+
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`animate-fade-in-up ${
+                msg.role === 'user' ? 'flex justify-end' : msg.role === 'system' ? 'flex justify-center' : 'flex justify-start'
+              }`}
+            >
+              {msg.role === 'system' ? (
+                <div className="text-amber-500/50 text-xs text-center px-4 py-2 bg-amber-900/10 rounded-full">
+                  {msg.content}
+                </div>
+              ) : msg.role === 'user' ? (
+                <div className="max-w-[80%] bg-amber-800/25 border border-amber-700/20 rounded-2xl rounded-br-md px-4 py-2.5 text-amber-100/90 text-sm backdrop-blur-sm">
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="max-w-[85%] bg-stone-900/80 border border-stone-700/30 rounded-2xl rounded-bl-md px-4 py-3 text-amber-100/80 text-sm leading-relaxed whitespace-pre-wrap backdrop-blur-sm">
+                  {msg.content}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
+            <div className="flex justify-start">
+              <div className="bg-stone-900/80 border border-stone-700/30 rounded-2xl px-4 py-3 flex gap-1 backdrop-blur-sm">
+                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
+                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
+                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Mailbox notification */}
@@ -400,7 +350,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       {/* Quick actions */}
       {!isStreaming && (
-        <div className="px-4 pb-2 flex gap-2 overflow-x-auto">
+        <div className="px-4 pb-2 flex gap-2 overflow-x-auto flex-none">
           {getQuickActions().map((action) => (
             <button
               key={action}
