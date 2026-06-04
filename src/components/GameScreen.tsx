@@ -55,6 +55,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [letterLoading, setLetterLoading] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
   const [showLetterBox, setShowLetterBox] = useState(false);
+  const [parsedOptions, setParsedOptions] = useState<string[]>([]);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -123,6 +124,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }, [gameState]);
 
   async function sendMessage(text: string) {
+    setParsedOptions([]); // Clear options when sending
     if (gameState.actionsToday >= 10) {
       const limitMsg: ChatMessage = { role: 'system', content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。', timestamp: Date.now() };
       setMessages(prev => [...prev, limitMsg]);
@@ -168,7 +170,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               const parsed = JSON.parse(data);
               if (parsed.content) {
                 fullContent += parsed.content;
-                assistantMsg.content = fullContent;
+                // Real-time tag cleanup during streaming
+                const cleaned = fullContent.replace(/\[SCENE:[^\]]*\]/g, '').replace(/\[MAILBOX\]/g, '').trim();
+                assistantMsg.content = cleaned;
                 setMessages([...newMessages, { ...assistantMsg }]);
               }
             } catch { /* skip */ }
@@ -232,6 +236,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // Clean ALL tags from displayed content (final pass)
       fullContent = fullContent.replace(/\n?\[SCENE:[^\]]*\]/g, '').replace(/\n?\[MAILBOX\]/g, '').trim();
+
+      // Parse AI options like 【选项A】text into clickable buttons
+      const optionMatches = fullContent.match(/【选项[A-Z]】([^\n【]+)/g);
+      if (optionMatches) {
+        const options = optionMatches.map(m => m.replace(/【选项[A-Z]】/, '').trim());
+        setParsedOptions(options);
+      } else {
+        setParsedOptions([]);
+      }
+
       assistantMsg.content = fullContent;
       setMessages([...newMessages, { ...assistantMsg }]);
 
@@ -460,16 +474,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
 
-      {/* Quick actions — hidden when mailbox is showing */}
-      {!isStreaming && !showMailbox && (
-        <div className="px-5 pb-2 flex gap-2 overflow-x-auto flex-none z-10">
-          {getQuickActions().map((action) => (
+      {/* Parsed AI options as clickable buttons */}
+      {!isStreaming && !showMailbox && parsedOptions.length > 0 && (
+        <div className="px-5 pb-2 flex flex-col gap-2 flex-none z-10">
+          {parsedOptions.map((option, i) => (
             <button
-              key={action}
-              onClick={() => sendMessage(action)}
-              className="flex-none px-3 py-1.5 rounded-full bg-amber-900/15 border border-amber-800/15 text-amber-500/50 text-xs hover:bg-amber-800/20 hover:text-amber-300/70 transition-colors whitespace-nowrap"
+              key={i}
+              onClick={() => { setParsedOptions([]); sendMessage(option); }}
+              className="w-full text-left px-4 py-2 rounded-lg bg-amber-900/15 border border-amber-800/20 text-amber-400/70 text-sm hover:bg-amber-800/25 hover:text-amber-300/80 transition-colors"
             >
-              {action}
+              {option}
             </button>
           ))}
         </div>
