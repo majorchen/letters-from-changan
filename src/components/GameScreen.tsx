@@ -31,6 +31,18 @@ const MAILBOX_INJECTION = '\n\n你走进房间，把行李放下。正要歇脚�
 
 let messageCounter = 0;
 let mailboxInjected = false;
+let lastSceneLocation = '';
+
+const LOCATION_KEYWORDS = [
+  { keyword: '西市', scene: 'Tang Dynasty West Market bazaar, crowded stalls with silk fabrics spices and pottery, Persian and Chinese merchants trading, warm lantern light, bustling energy' },
+  { keyword: '东市', scene: 'Tang Dynasty East Market, elegant shops with jade calligraphy and luxury goods, scholars and nobles browsing, morning sunlight through wooden eaves' },
+  { keyword: '客栈', scene: 'Interior of a Tang Dynasty inn room, warm candlelight, wooden furniture, silk curtains, a mysterious ceramic mailbox glowing faintly in the corner' },
+  { keyword: '酒肆', scene: 'Tang Dynasty wine house interior, warm amber light, patrons drinking and laughing, a musician playing pipa in the corner, steam rising from hot dishes' },
+  { keyword: '城门', scene: 'Tang Dynasty Chang an Zhuque Gate at golden hour, massive city walls, guards in armor, stream of travelers entering, warm sunset light' },
+  { keyword: '朱雀大街', scene: 'Tang Dynasty Zhuque Avenue, wide grand boulevard stretching to the horizon, crowds of people in colorful Tang robes, horse carriages, willow trees lining the road' },
+  { keyword: '道观', scene: 'A quiet Taoist temple in Tang Dynasty Chang an, incense smoke curling upward, ancient cypress trees, a priest sweeping stone steps in golden afternoon light' },
+  { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an at dusk, narrow alleys between courtyard houses, children playing, the smell of cooking, warm lanterns being lit' },
+];
 
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
   const [gamePhase, setGamePhase] = useState<'prologue' | 'typewriter' | 'playing'>('prologue');
@@ -186,10 +198,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         setShowMailbox(true);
       }
 
-      // Generate new scene image on chapter change
-      if (updated.chapter !== gameState.chapter) {
-        const sceneDesc = fullContent.slice(0, 150).replace(/【.*?】/g, '');
-        generateSceneImage(`Tang Dynasty Chang'an, ${sceneDesc}`);
+      // Generate scene image when location changes (keyword-based)
+      for (const loc of LOCATION_KEYWORDS) {
+        if (fullContent.includes(loc.keyword) && lastSceneLocation !== loc.keyword) {
+          lastSceneLocation = loc.keyword;
+          generateSceneImage(loc.scene);
+          break;
+        }
       }
 
       onStateChange(updated);
@@ -339,22 +354,22 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
 
-      {/* Floating header — no bar, transparent */}
-      <div className="flex-none px-5 pt-4 pb-2 flex items-start justify-between z-10 relative">
-        <button onClick={onExit} className="text-amber-600/30 text-xs hover:text-amber-400 transition-colors">
+      {/* Header bar — semi-transparent, shows through to scene image */}
+      <div className="flex-none px-4 py-3 bg-stone-950/60 backdrop-blur-sm border-b border-amber-900/10 flex items-center justify-between z-10 relative">
+        <button onClick={onExit} className="text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
           ← 离开
         </button>
         <div className="text-center">
-          <div className="text-amber-400/50 text-xs font-medium">{gameState.location}</div>
-          <div className="text-amber-600/20 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
+          <div className="text-amber-300/70 text-sm font-medium">{gameState.location}</div>
+          <div className="text-amber-500/30 text-xs">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {gameState.letterHistory.length > 0 && (
-            <button onClick={() => setShowLetterBox(true)} className="text-amber-500/30 hover:text-amber-400 text-sm" title="信匣">
+            <button onClick={() => setShowLetterBox(true)} className="text-amber-400/40 hover:text-amber-400 text-base" title="信匣">
               📜
             </button>
           )}
-          <span className="text-amber-600/20 text-[10px]">{gameState.actionsToday}/10</span>
+          <span className="text-amber-500/30 text-xs">{gameState.actionsToday}/10</span>
         </div>
       </div>
 
@@ -420,7 +435,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex-none px-5 pb-5 pt-2 z-10">
+      <form onSubmit={handleSubmit} className="flex-none px-4 pb-4 pt-2 z-10">
         <div className="flex gap-2 items-end max-w-lg mx-auto">
           <textarea
             value={input}
@@ -429,12 +444,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             placeholder="说点什么..."
             rows={1}
             disabled={isStreaming}
-            className="flex-1 bg-transparent border-b border-amber-800/20 px-1 py-2 text-sm text-amber-100/80 placeholder:text-amber-700/20 resize-none focus:outline-none focus:border-amber-600/40 disabled:opacity-50"
+            className="flex-1 bg-stone-800/40 border border-amber-900/20 rounded-xl px-4 py-2.5 text-sm text-amber-100/80 placeholder:text-amber-700/25 resize-none focus:outline-none focus:border-amber-600/30 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming}
-            className="flex-none text-amber-500/40 hover:text-amber-300 transition-colors disabled:opacity-20 text-sm pb-2"
+            className="flex-none w-10 h-10 rounded-xl bg-amber-700/25 border border-amber-600/20 flex items-center justify-center text-amber-300/70 hover:bg-amber-700/40 transition-colors disabled:opacity-20"
           >
             ↑
           </button>
