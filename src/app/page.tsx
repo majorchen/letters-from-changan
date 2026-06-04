@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import StartScreen from '@/components/StartScreen';
 import GameScreen from '@/components/GameScreen';
 import { PlayerState } from '@/lib/prompts';
-import { activateSave, createNewGame, deleteSave, listSaveSummaries, SaveSummary } from '@/lib/gameState';
+import { activateSave, createNewGame, listSaveSummaries, SaveSummary } from '@/lib/gameState';
 
 export default function Home() {
   const [gameState, setGameState] = useState<PlayerState | null>(null);
@@ -31,11 +31,6 @@ export default function Home() {
     }
   }
 
-  function handleDeleteSave(saveId: string) {
-    deleteSave(saveId);
-    setSaves(listSaveSummaries());
-  }
-
   function handleExit() {
     setScreen('start');
     setSaves(listSaveSummaries());
@@ -50,7 +45,7 @@ export default function Home() {
   }
 
   if (screen === 'start') {
-    return <StartScreen onStart={handleStart} saves={saves} onContinue={handleContinue} onDeleteSave={handleDeleteSave} />;
+    return <StartScreen onStart={handleStart} saves={saves} onContinue={handleContinue} />;
   }
 
   if (screen === 'game' && gameState) {

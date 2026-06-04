@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useState } from 'react';
 import { ROLES } from '@/lib/prompts';
 import { SaveSummary } from '@/lib/gameState';
 
@@ -8,7 +9,6 @@ interface Props {
   onStart: (role: string) => void;
   saves: SaveSummary[];
   onContinue: (saveId: string) => void;
-  onDeleteSave: (saveId: string) => void;
 }
 
 function formatSaveTime(timestamp: number): string {
@@ -16,8 +16,9 @@ function formatSaveTime(timestamp: number): string {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function StartScreen({ onStart, saves, onContinue, onDeleteSave }: Props) {
+export default function StartScreen({ onStart, saves, onContinue }: Props) {
   const hasSaves = saves.length > 0;
+  const [showSavePicker, setShowSavePicker] = useState(false);
 
   return (
     <div className="h-full flex flex-col items-end justify-end px-6 pb-8 relative overflow-hidden">
@@ -70,39 +71,13 @@ export default function StartScreen({ onStart, saves, onContinue, onDeleteSave }
         </p>
 
         {hasSaves && (
-          <div className="mb-5 space-y-2 animate-fade-in-up" style={{ animationDelay: '1.2s', animationFillMode: 'both' }}>
-            <div className="text-amber-400/50 text-xs tracking-widest">— 继续一段旅程 —</div>
-            <div className="space-y-2 max-h-44 overflow-y-auto chat-scroll pr-1">
-              {saves.map((save) => {
-                const role = ROLES[save.role] || ROLES.scholar;
-                return (
-                  <div
-                    key={save.id}
-                    className="group flex items-center gap-3 rounded-lg border border-amber-700/25 bg-stone-900/55 backdrop-blur-sm px-3 py-2 text-left"
-                  >
-                    <button onClick={() => onContinue(save.id)} className="min-w-0 flex-1 text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{role.emoji}</span>
-                        <span className="text-amber-200 text-sm font-medium truncate">{role.name} · {save.location}</span>
-                      </div>
-                      <div className="mt-0.5 text-amber-500/40 text-[11px] truncate">
-                        {formatSaveTime(save.updatedAt)} · {save.letterCount}封信 · {save.messageCount}段叙事
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('删除这段旅程？')) onDeleteSave(save.id);
-                      }}
-                      className="text-amber-700/35 hover:text-amber-400 text-xs px-2 py-1"
-                      title="删除存档"
-                    >
-                      删除
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <button
+            onClick={() => setShowSavePicker(true)}
+            className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/30 border border-amber-600/40 text-amber-200 hover:bg-amber-700/50 transition-all animate-pulse-glow backdrop-blur-sm animate-fade-in-up"
+            style={{ animationDelay: '1.2s', animationFillMode: 'both' }}
+          >
+            继续旅程
+          </button>
         )}
 
         {/* Role selection */}
@@ -128,6 +103,44 @@ export default function StartScreen({ onStart, saves, onContinue, onDeleteSave }
           AI 驱动 · 每次游戏都是独一无二的故事
         </p>
       </div>
+
+      {showSavePicker && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSavePicker(false)} />
+          <div className="relative z-10 w-full max-w-lg mx-4 mb-4 sm:mb-0 rounded-xl border border-amber-700/25 bg-stone-950/90 shadow-2xl overflow-hidden animate-letter-slide">
+            <div className="px-5 pt-5 pb-3 flex items-center justify-between border-b border-amber-800/15">
+              <div>
+                <h2 className="font-handwriting text-2xl text-amber-200/90">选择一段旅程</h2>
+                <p className="text-amber-500/35 text-xs mt-1">由近及远，翻开你留下的长安</p>
+              </div>
+              <button onClick={() => setShowSavePicker(false)} className="text-amber-500/45 hover:text-amber-300 text-sm">
+                关闭
+              </button>
+            </div>
+
+            <div className="max-h-[62vh] overflow-y-auto chat-scroll px-4 py-4 space-y-3">
+              {saves.map((save) => {
+                const role = ROLES[save.role] || ROLES.scholar;
+                return (
+                  <button
+                    key={save.id}
+                    onClick={() => onContinue(save.id)}
+                    className="w-full rounded-lg border border-amber-800/20 bg-stone-900/70 px-4 py-3 text-left hover:bg-amber-950/40 hover:border-amber-600/35 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{role.emoji}</span>
+                      <span className="text-amber-200/90 text-sm font-medium truncate">{role.name} · {save.location}</span>
+                    </div>
+                    <div className="mt-1 text-amber-500/40 text-xs truncate">
+                      {formatSaveTime(save.updatedAt)} · {save.letterCount}封信 · {save.messageCount}段叙事
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
