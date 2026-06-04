@@ -82,3 +82,21 @@ body {
 .typing-dot:nth-child(1) { animation: typing-dot 1.4s infinite 0s; }
 .typing-dot:nth-child(2) { animation: typing-dot 1.4s infinite 0.2s; }
 .typing-dot:nth-child(3) { animation: typing-dot 1.4s infinite 0.4s; }
+
+@keyframes slowZoom {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+.animate-slow-zoom {
+  animation: slowZoom 20s ease-out forwards;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); opacity: 0.15; }
+  25% { transform: translateY(-20px) translateX(5px); opacity: 0.4; }
+  50% { transform: translateY(-35px) translateX(-3px); opacity: 0.2; }
+  75% { transform: translateY(-15px) translateX(8px); opacity: 0.35; }
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
