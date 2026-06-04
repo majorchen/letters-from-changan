@@ -449,7 +449,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setLetterContent('');
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 25000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 55000);
     try {
       const gs = gameStateRef.current;
       const currentHistory = gs.letterHistory || [];

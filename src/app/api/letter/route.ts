@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { LETTER_WRITER_PROMPT } from '@/lib/prompts';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type LetterItem = {
   from: string;
@@ -31,6 +31,16 @@ function getClient() {
   });
 }
 
+const FALLBACK_FIRST_LETTER = `陌生的收信人：
+
+我不知道这封信会不会抵达你手里。过去很久，我把许多纸片投进这个旧邮箱，只听见它们落下去的声音，从没有回响。
+
+如果你真的能读到它，请不要害怕。我来自很远的地方，远到连我自己也说不清该怎样解释。奇怪的是，我好像知道你住的那间客栈——许多年后，它还在，只是地下多了一层。
+
+你那里的夜晚，会不会也有人在街上打更？你看见长安的灯时，会想起谁？
+
+林深`;
+
 export async function POST(req: NextRequest) {
   if (!process.env.AGNES_API_KEY) {
     return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
@@ -55,6 +65,11 @@ export async function POST(req: NextRequest) {
 
   if (cleanedReply) {
     messages.push({ role: 'user', content: cleanedReply });
+  } else if (cleanedHistory.length > 0) {
+    messages.push({
+      role: 'user',
+      content: '请根据以上完整通信历史，写林深的下一封回信。必须回应玩家最近一封信里的具体内容，不要重复之前已经写过的信，不要重新写第一封信。',
+    });
   } else {
     messages.push({ role: 'user', content: '请写第一封信给这位刚到长安的外乡人。' });
   }
@@ -70,6 +85,9 @@ export async function POST(req: NextRequest) {
     const content = response.choices[0]?.message?.content || '';
     return Response.json({ content });
   } catch (err) {
+    if (!cleanedReply && cleanedHistory.length === 0) {
+      return Response.json({ content: FALLBACK_FIRST_LETTER, fallback: true });
+    }
     return Response.json({ error: String(err) }, { status: 500 });
   }
 }
