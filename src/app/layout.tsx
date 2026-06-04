@@ -1,5 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Serif_SC, Ma_Shan_Zheng } from "next/font/google";
 import "./globals.css";
+
+const notoSerif = Noto_Serif_SC({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+const maShan = Ma_Shan_Zheng({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-handwriting",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "来信长安 | Letters from Chang'an",
@@ -34,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className="h-full">
+    <html lang="zh-CN" className={`h-full ${notoSerif.variable} ${maShan.variable}`}>
       <body className="h-full bg-stone-950 text-amber-50 overflow-hidden">
         {children}
       </body>
