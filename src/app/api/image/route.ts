@@ -19,9 +19,9 @@ export async function POST(req: NextRequest) {
 
   try {
     // Agnes image API supports 1024x768 / 1024x1024 / 768x1024 only (NOT 1792x1024).
-    // 2.1-flash is optimized for high-information-density / complex scenes.
+    // 2.0-flash verified stable; 2.1 was unstable (520 errors).
     const response = await getClient().images.generate({
-      model: 'agnes-image-2.1-flash',
+      model: 'agnes-image-2.0-flash',
       prompt,
       size: '1024x768',
     });
