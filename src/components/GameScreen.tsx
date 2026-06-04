@@ -198,12 +198,26 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         setShowMailbox(true);
       }
 
-      // Generate scene image when location changes (keyword-based)
-      for (const loc of LOCATION_KEYWORDS) {
-        if (fullContent.includes(loc.keyword) && lastSceneLocation !== loc.keyword) {
-          lastSceneLocation = loc.keyword;
-          generateSceneImage(loc.scene);
-          break;
+      // Scene image: detect [SCENE:...] tag from AI, or fallback to keyword matching
+      const sceneMatch = fullContent.match(/\[SCENE:(.+?)\]/);
+      if (sceneMatch) {
+        const sceneDesc = sceneMatch[1].trim();
+        if (sceneDesc !== lastSceneLocation) {
+          lastSceneLocation = sceneDesc;
+          generateSceneImage(sceneDesc + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.');
+        }
+        // Remove the tag from displayed content
+        fullContent = fullContent.replace(/\n?\[SCENE:.+?\]/, '');
+        assistantMsg.content = fullContent;
+        setMessages([...newMessages, { ...assistantMsg }]);
+      } else {
+        // Fallback: keyword matching for common locations
+        for (const loc of LOCATION_KEYWORDS) {
+          if (fullContent.includes(loc.keyword) && lastSceneLocation !== loc.keyword) {
+            lastSceneLocation = loc.keyword;
+            generateSceneImage(loc.scene);
+            break;
+          }
         }
       }
 
