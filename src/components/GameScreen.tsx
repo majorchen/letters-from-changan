@@ -213,7 +213,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       }
 
       // Scene image: detect [SCENE:...] tag from AI (multiline-safe)
-      const sceneMatch = fullContent.match(/\[SCENE:([^\]]+)\]/s);
+      const sceneMatch = fullContent.match(/\[SCENE:([^\]]+)\]/);
       if (sceneMatch) {
         const sceneDesc = sceneMatch[1].trim();
         if (sceneDesc !== lastSceneLocation) {
@@ -231,7 +231,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       }
 
       // Clean ALL tags from displayed content (final pass)
-      fullContent = fullContent.replace(/\n?\[SCENE:[^\]]*\]/gs, '').replace(/\n?\[MAILBOX\]/g, '').trim();
+      fullContent = fullContent.replace(/\n?\[SCENE:[^\]]*\]/g, '').replace(/\n?\[MAILBOX\]/g, '').trim();
       assistantMsg.content = fullContent;
       setMessages([...newMessages, { ...assistantMsg }]);
 
@@ -302,12 +302,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   function handleLetterClose() {
     setShowLetter(false);
-    // If player just read the letter without replying, also continue narration
-    if (gameState.chapter === 'first_letter_read' || gameState.chapter === 'mailbox_found') {
-      setTimeout(() => {
-        sendMessage('（我收好这封奇怪的信，思绪万千……）');
-      }, 800);
-    }
+    // Always continue narration after closing letter
+    setTimeout(() => {
+      sendMessage('（我收好这封信，思绪万千……）');
+    }, 800);
   }
 
   async function generateSceneImage(scene: string) {
