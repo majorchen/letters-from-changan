@@ -2,6 +2,26 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { LETTER_WRITER_PROMPT } from '@/lib/prompts';
 
+type LetterItem = {
+  from: string;
+  content: string;
+};
+
+function cleanLetterHistory(value: unknown): LetterItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((letter): letter is LetterItem => {
+      if (!letter || typeof letter !== 'object') return false;
+      const item = letter as Record<string, unknown>;
+      return (item.from === 'linShen' || item.from === 'player') && typeof item.content === 'string';
+    })
+    .slice(-12)
+    .map((letter) => ({
+      from: letter.from,
+      content: letter.content.slice(0, 1200),
+    }));
+}
+
 function getClient() {
   return new OpenAI({
     apiKey: process.env.AGNES_API_KEY || '',
@@ -10,14 +30,20 @@ function getClient() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!process.env.AGNES_API_KEY) {
+    return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
+  }
+
   const { playerReply, letterHistory } = await req.json();
+  const cleanedHistory = cleanLetterHistory(letterHistory);
+  const cleanedReply = typeof playerReply === 'string' ? playerReply.slice(0, 1200) : null;
 
   const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
     { role: 'system', content: LETTER_WRITER_PROMPT },
   ];
 
-  if (letterHistory && letterHistory.length > 0) {
-    for (const letter of letterHistory) {
+  if (cleanedHistory.length > 0) {
+    for (const letter of cleanedHistory) {
       messages.push({
         role: letter.from === 'linShen' ? 'assistant' : 'user',
         content: letter.content,
@@ -25,8 +51,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (playerReply) {
-    messages.push({ role: 'user', content: playerReply });
+  if (cleanedReply) {
+    messages.push({ role: 'user', content: cleanedReply });
   } else {
     messages.push({ role: 'user', content: '请写第一封信给这位刚到长安的外乡人。' });
   }

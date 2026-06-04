@@ -12,10 +12,18 @@ function getClient() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!process.env.AGNES_API_KEY) {
+    return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
+  }
+
   const { scene } = await req.json();
+  const cleanedScene = typeof scene === 'string' ? scene.slice(0, 1200).trim() : '';
+  if (!cleanedScene) {
+    return Response.json({ error: 'Missing scene' }, { status: 400 });
+  }
 
   // Avoid double-applying the style suffix if caller already included it
-  const prompt = scene.includes('aged silk') ? scene : `${scene}. ${IMAGE_PROMPT_SUFFIX}`;
+  const prompt = cleanedScene.includes('aged silk') ? cleanedScene : `${cleanedScene}. ${IMAGE_PROMPT_SUFFIX}`;
 
   try {
     // Agnes image API supports 1024x768 / 1024x1024 / 768x1024 only (NOT 1792x1024).

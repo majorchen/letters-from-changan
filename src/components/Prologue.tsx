@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 
 interface Props {
@@ -36,7 +37,7 @@ export default function Prologue({ role, onComplete }: Props) {
 
   // Preload image
   useEffect(() => {
-    const img = new Image();
+    const img = new window.Image();
     img.onload = () => setImgLoaded(true);
     img.src = bgUrl;
   }, [bgUrl]);
@@ -66,7 +67,14 @@ export default function Prologue({ role, onComplete }: Props) {
           className="absolute inset-0 transition-opacity duration-[2000ms]"
           style={{ opacity: phase === 'atmosphere' || phase === 'fade' ? 0.4 : 0 }}
         >
-          <img src={bgUrl} alt="" className="w-full h-full object-cover" />
+          <Image
+            src={bgUrl}
+            alt=""
+            fill
+            sizes="100vw"
+            priority
+            className="object-cover"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/60 to-stone-950/30" />
         </div>
       )}

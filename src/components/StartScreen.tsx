@@ -1,22 +1,35 @@
 'use client';
 
+import Image from 'next/image';
 import { ROLES } from '@/lib/prompts';
+import { SaveSummary } from '@/lib/gameState';
 
 interface Props {
   onStart: (role: string) => void;
-  hasSave: boolean;
-  onContinue: () => void;
+  saves: SaveSummary[];
+  onContinue: (saveId: string) => void;
+  onDeleteSave: (saveId: string) => void;
 }
 
-export default function StartScreen({ onStart, hasSave, onContinue }: Props) {
+function formatSaveTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+export default function StartScreen({ onStart, saves, onContinue, onDeleteSave }: Props) {
+  const hasSaves = saves.length > 0;
+
   return (
     <div className="h-full flex flex-col items-end justify-end px-6 pb-8 relative overflow-hidden">
       {/* Background image with slow zoom animation */}
       <div className="absolute inset-0 animate-slow-zoom">
-        <img
+        <Image
           src="/bg-changan.webp"
           alt=""
-          className="w-full h-full object-cover"
+          fill
+          sizes="100vw"
+          priority
+          className="object-cover"
         />
       </div>
 
@@ -56,19 +69,45 @@ export default function StartScreen({ onStart, hasSave, onContinue }: Props) {
           你有一封跨越千年的信
         </p>
 
-        {hasSave && (
-          <button
-            onClick={onContinue}
-            className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/30 border border-amber-600/40 text-amber-200 hover:bg-amber-700/50 transition-all animate-pulse-glow backdrop-blur-sm animate-fade-in-up"
-            style={{ animationDelay: '1.2s', animationFillMode: 'both' }}
-          >
-            继续旅程
-          </button>
+        {hasSaves && (
+          <div className="mb-5 space-y-2 animate-fade-in-up" style={{ animationDelay: '1.2s', animationFillMode: 'both' }}>
+            <div className="text-amber-400/50 text-xs tracking-widest">— 继续一段旅程 —</div>
+            <div className="space-y-2 max-h-44 overflow-y-auto chat-scroll pr-1">
+              {saves.map((save) => {
+                const role = ROLES[save.role] || ROLES.scholar;
+                return (
+                  <div
+                    key={save.id}
+                    className="group flex items-center gap-3 rounded-lg border border-amber-700/25 bg-stone-900/55 backdrop-blur-sm px-3 py-2 text-left"
+                  >
+                    <button onClick={() => onContinue(save.id)} className="min-w-0 flex-1 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{role.emoji}</span>
+                        <span className="text-amber-200 text-sm font-medium truncate">{role.name} · {save.location}</span>
+                      </div>
+                      <div className="mt-0.5 text-amber-500/40 text-[11px] truncate">
+                        {formatSaveTime(save.updatedAt)} · {save.letterCount}封信 · {save.messageCount}段叙事
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('删除这段旅程？')) onDeleteSave(save.id);
+                      }}
+                      className="text-amber-700/35 hover:text-amber-400 text-xs px-2 py-1"
+                      title="删除存档"
+                    >
+                      删除
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* Role selection */}
-        <div className="text-amber-400/50 text-xs mb-3 tracking-widest animate-fade-in-up" style={{ animationDelay: hasSave ? '1.4s' : '1.2s', animationFillMode: 'both' }}>
-          {hasSave ? '— 或开始新的旅程 —' : '— 选择你的身份 —'}
+        <div className="text-amber-400/50 text-xs mb-3 tracking-widest animate-fade-in-up" style={{ animationDelay: hasSaves ? '1.4s' : '1.2s', animationFillMode: 'both' }}>
+          {hasSaves ? '— 或开始新的旅程 —' : '— 选择你的身份 —'}
         </div>
         <div className="grid grid-cols-2 gap-3">
           {Object.entries(ROLES).map(([key, role], idx) => (
@@ -76,7 +115,7 @@ export default function StartScreen({ onStart, hasSave, onContinue }: Props) {
               key={key}
               onClick={() => onStart(key)}
               className="group p-4 rounded-xl border border-amber-700/25 bg-stone-900/60 backdrop-blur-sm hover:bg-amber-900/40 hover:border-amber-500/40 transition-all text-left animate-fade-in-up"
-              style={{ animationDelay: `${(hasSave ? 1.5 : 1.3) + idx * 0.1}s`, animationFillMode: 'both' }}
+              style={{ animationDelay: `${(hasSaves ? 1.5 : 1.3) + idx * 0.1}s`, animationFillMode: 'both' }}
             >
               <div className="text-2xl mb-1">{role.emoji}</div>
               <div className="text-amber-200 font-medium text-sm">{role.name}</div>

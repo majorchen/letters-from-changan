@@ -4,39 +4,41 @@ import { useState, useEffect } from 'react';
 import StartScreen from '@/components/StartScreen';
 import GameScreen from '@/components/GameScreen';
 import { PlayerState } from '@/lib/prompts';
-import { loadGameState, createNewGame, clearGame } from '@/lib/gameState';
+import { activateSave, createNewGame, deleteSave, listSaveSummaries, SaveSummary } from '@/lib/gameState';
 
 export default function Home() {
   const [gameState, setGameState] = useState<PlayerState | null>(null);
   const [screen, setScreen] = useState<'loading' | 'start' | 'game'>('loading');
-  const [hasSave, setHasSave] = useState(false);
+  const [saves, setSaves] = useState<SaveSummary[]>([]);
 
   useEffect(() => {
-    const saved = loadGameState();
-    if (saved) {
-      setHasSave(true);
-    }
+    setSaves(listSaveSummaries());
     setScreen('start');
   }, []);
 
   function handleStart(role: string) {
-    clearGame();
     const state = createNewGame(role);
+    setSaves(listSaveSummaries());
     setGameState(state);
     setScreen('game');
   }
 
-  function handleContinue() {
-    const saved = loadGameState();
+  function handleContinue(saveId: string) {
+    const saved = activateSave(saveId);
     if (saved) {
       setGameState(saved);
       setScreen('game');
     }
   }
 
+  function handleDeleteSave(saveId: string) {
+    deleteSave(saveId);
+    setSaves(listSaveSummaries());
+  }
+
   function handleExit() {
     setScreen('start');
-    setHasSave(true);
+    setSaves(listSaveSummaries());
   }
 
   if (screen === 'loading') {
@@ -48,7 +50,7 @@ export default function Home() {
   }
 
   if (screen === 'start') {
-    return <StartScreen onStart={handleStart} hasSave={hasSave} onContinue={handleContinue} />;
+    return <StartScreen onStart={handleStart} saves={saves} onContinue={handleContinue} onDeleteSave={handleDeleteSave} />;
   }
 
   if (screen === 'game' && gameState) {

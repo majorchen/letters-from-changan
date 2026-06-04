@@ -1,5 +1,44 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
+import { buildSystemPrompt, PlayerState, ROLES } from '@/lib/prompts';
+
+type ClientMessage = {
+  role: string;
+  content: string;
+};
+
+function cleanMessages(messages: unknown): { role: 'user' | 'assistant'; content: string }[] {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .filter((message): message is ClientMessage => {
+      if (!message || typeof message !== 'object') return false;
+      const item = message as Record<string, unknown>;
+      return (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string';
+    })
+    .slice(-20)
+    .map((message) => ({
+      role: message.role as 'user' | 'assistant',
+      content: message.content.slice(0, 2000),
+    }));
+}
+
+function normalizePlayerState(value: unknown): PlayerState | null {
+  if (!value || typeof value !== 'object') return null;
+  const state = value as Partial<PlayerState>;
+  if (!state.role || !(state.role in ROLES)) return null;
+  return {
+    role: state.role,
+    location: typeof state.location === 'string' ? state.location.slice(0, 80) : '长安城门外',
+    chapter: typeof state.chapter === 'string' ? state.chapter.slice(0, 60) : 'arrival',
+    knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs.filter((item): item is string => typeof item === 'string').slice(0, 20) : [],
+    events: Array.isArray(state.events) ? state.events.filter((item): item is string => typeof item === 'string').slice(0, 40) : [],
+    hasMailbox: Boolean(state.hasMailbox),
+    unreadLetters: Number.isFinite(state.unreadLetters) ? Number(state.unreadLetters) : 0,
+    letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory.slice(-12) as PlayerState['letterHistory'] : [],
+    actionsToday: 0,
+    lastPlayDate: typeof state.lastPlayDate === 'string' ? state.lastPlayDate : new Date().toISOString().split('T')[0],
+  };
+}
 
 function getClient() {
   return new OpenAI({
@@ -9,14 +48,22 @@ function getClient() {
 }
 
 export async function POST(req: NextRequest) {
-  const { messages, systemPrompt } = await req.json();
+  if (!process.env.AGNES_API_KEY) {
+    return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
+  }
+
+  const { messages, playerState } = await req.json();
+  const normalizedState = normalizePlayerState(playerState);
+  if (!normalizedState) {
+    return Response.json({ error: 'Invalid playerState' }, { status: 400 });
+  }
+
+  const systemPrompt = buildSystemPrompt(normalizedState.role, normalizedState);
+  const cleanClientMessages = cleanMessages(messages);
 
   const allMessages = [
     { role: 'system' as const, content: systemPrompt },
-    ...messages.map((m: { role: string; content: string }) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    })),
+    ...cleanClientMessages,
   ];
 
   try {
