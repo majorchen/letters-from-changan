@@ -176,29 +176,31 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
-      // Detect [MAILBOX] tag from AI — triggers mailbox discovery
+      // Detect [MAILBOX] tag — auto-open letter modal
+      let mailboxTriggered = false;
       if (fullContent.includes('[MAILBOX]') && !gameState.hasMailbox) {
-        fullContent = fullContent.replace(/\n?\[MAILBOX\]/, '');
+        fullContent = fullContent.replace(/\n?\[MAILBOX\][\s\S]*$/, '').trim();
         assistantMsg.content = fullContent;
         setMessages([...newMessages, { ...assistantMsg }]);
+        mailboxTriggered = true;
       }
 
       const updated = updateChapter(gameState, fullContent);
 
-      // When mailbox is found (via keyword detection in updateChapter), show button
-      if (updated.hasMailbox && !gameState.hasMailbox) {
-        updated.unreadLetters = 1;
-        setShowMailbox(true);
-      }
-      // Also handle [MAILBOX] tag directly
-      if (fullContent.includes('陶器') || fullContent.includes('邮箱')) {
-        if (!updated.hasMailbox) {
-          updated.hasMailbox = true;
-          updated.chapter = 'mailbox_found';
-          updated.unreadLetters = 1;
-          updated.events = [...updated.events, '发现邮箱'];
-          setShowMailbox(true);
-        }
+      // Handle mailbox trigger — directly open letter, skip button
+      if (mailboxTriggered || (fullContent.includes('陶器') && !updated.hasMailbox) || (fullContent.includes('发光') && fullContent.includes('邮箱') && !updated.hasMailbox)) {
+        updated.hasMailbox = true;
+        updated.chapter = 'mailbox_found';
+        updated.events = [...updated.events, '发现邮箱'];
+        // Save state first, then auto-open letter after a brief pause
+        onStateChange(updated);
+        saveGameState(updated);
+        const finalMsgs = [...newMessages, { ...assistantMsg, content: fullContent }];
+        saveChatHistory(finalMsgs);
+        setMessages(finalMsgs);
+        setIsStreaming(false);
+        setTimeout(() => openLetter(), 1500);
+        return;
       }
 
       // After replying to letter, new letter arrives after 5 more interactions
