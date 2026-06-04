@@ -381,9 +381,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       </div>
 
-      {/* Scene image — between header and text, not overlapping */}
+      {/* Scene image — compact, between header and text */}
       {sceneImage && (
-        <div className="flex-none h-[30vh] relative">
+        <div className="flex-none h-[22vh] relative">
           <img
             src={sceneImage}
             alt=""
@@ -394,13 +394,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
       {!sceneImage && imageLoading && (
-        <div className="flex-none h-12 flex items-center justify-center">
+        <div className="flex-none h-10 flex items-center justify-center">
           <span className="text-amber-600/20 text-xs">场景浮现中...</span>
         </div>
       )}
 
-      {/* Text area — no bubbles, pure literary layout */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4">
+      {/* Text area — with top fade-out effect */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4 text-fade-mask">
 
         <div className="max-w-lg mx-auto space-y-5">
           {messages.map((msg, i) => (
