@@ -94,6 +94,7 @@ export const ROLES: Record<string, { name: string; desc: string; emoji: string }
 export function buildSystemPrompt(role: string, playerState: PlayerState): string {
   const roleInfo = ROLES[role] || ROLES.scholar;
   const mailbox = getMailboxState(playerState);
+  const recentLetters = formatRecentLetters(playerState.letterHistory);
   return `${WORLD_SETTING}
 
 ## 当前玩家信息
@@ -105,8 +106,23 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
 - 游戏阶段：${playerState.chapter}
 - 已进行回合：${playerState.turnCount || 0}
 
+## 最近书信上下文
+${recentLetters}
+
 ## 当前场景指引
 ${getChapterGuide(playerState)}`;
+}
+
+function formatRecentLetters(letterHistory: PlayerState["letterHistory"]): string {
+  if (!letterHistory || letterHistory.length === 0) return "暂无。";
+  return letterHistory
+    .slice(-4)
+    .map((letter) => {
+      const sender = letter.from === "player" ? "玩家回信" : "林深来信";
+      const content = letter.content.replace(/\s+/g, " ").slice(0, 220);
+      return `- ${sender}：${content}`;
+    })
+    .join("\n");
 }
 
 function getChapterGuide(state: PlayerState): string {
@@ -127,6 +143,9 @@ function getChapterGuide(state: PlayerState): string {
     return `玩家已经打开邮箱并读了第一封信（来自2077年的林深）。
 注意：玩家已经读过信了。不要再说"你注意到陶罐"或"你发现邮箱"——那已经发生了。
 现在玩家在消化信的内容，继续正常推进长安的生活。
+- 必须承接最近书信上下文，而不是重置剧情
+- 不要默认把剧情拐回客栈；除非玩家当前就在客栈或主动回去
+- 不要凭空反复引入"黑衣人"作为悬疑钩子；只有历史上下文已经出现过，才可以继续处理
 - 可以让NPC说一些和信件内容有微妙呼应的话（但NPC不知道信的存在）
 - 李无名如果登场，可以暗示"有些信不是从驿路来的"，但不要明说邮箱
 - 王掌柜可以无意说出和林深信里细节矛盾的话
@@ -137,6 +156,8 @@ function getChapterGuide(state: PlayerState): string {
     return `玩家已经回信给林深，信已经寄出去了。
 注意：玩家已经完成了回信动作。不要提及"是否回信"这个问题——已经回了。
 继续长安生活：NPC互动、探索新地点、自然推进故事。
+必须承接玩家刚才回信的内容，让长安中的观察、对话或情绪受到它影响。
+不要默认把剧情拐回客栈或黑衣人，除非当前上下文已经在推进这条线。
 过几轮对话后，邮箱会再次发光——那是林深的回信到了。`;
   }
   return `自由探索阶段。玩家可以：

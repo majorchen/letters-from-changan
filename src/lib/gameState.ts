@@ -284,7 +284,7 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
         pendingFirstOpen: true,
         unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
       };
-      updated.unreadLetters = updated.mailbox.unread.length + 1;
+      updated.unreadLetters = updated.mailbox.unread.length;
       addEvent('发现邮箱');
     } else {
       updated.location = '王掌柜客栈';
