@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter } from '@/lib/gameState';
+import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache } from '@/lib/gameState';
 import { PlayerState, buildSystemPrompt, ROLES } from '@/lib/prompts';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
@@ -27,10 +27,9 @@ const ROLE_SCENES: Record<string, string> = {
   scholar: '/scene-scholar.webp',
 };
 
-// Mailbox injection removed — now handled by AI [MAILBOX] tag
-
+// Module-level state (reset on new game). Mailbox & scene changes are
+// driven by AI tags ([MAILBOX] / [SCENE:]) plus keyword fallback.
 let messageCounter = 0;
-// mailboxInjected not needed — AI handles via [MAILBOX] tag
 let lastSceneLocation = '';
 
 const LOCATION_KEYWORDS = [
@@ -44,6 +43,27 @@ const LOCATION_KEYWORDS = [
   { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an at dusk, narrow alleys between courtyard houses, children playing, the smell of cooking, warm lanterns being lit' },
 ];
 
+// Strip all tags and option lines from displayed narrative text.
+// Handles unclosed [SCENE: during streaming, and removes 【选项X】 lines.
+function cleanNarrative(text: string): string {
+  return text
+    // Remove [SCENE:...] complete or incomplete (streaming) — everything from [SCENE to closing ] or end of string
+    .replace(/\[SCENE:[^\]]*\]?/gi, '')
+    .replace(/\[MAILBOX\]?/gi, '')
+    // Remove option lines 【选项X】...
+    .replace(/【选项[A-Z]?】[^\n]*/g, '')
+    // Collapse extra blank lines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Extract option texts from raw AI content
+function extractOptions(text: string): string[] {
+  const matches = text.match(/【选项[A-Z]?】([^\n【]+)/g);
+  if (!matches) return [];
+  return matches.map(m => m.replace(/【选项[A-Z]?】/, '').trim()).filter(Boolean);
+}
+
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
   const [gamePhase, setGamePhase] = useState<'prologue' | 'typewriter' | 'playing'>('prologue');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -55,7 +75,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [letterLoading, setLetterLoading] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
   const [showLetterBox, setShowLetterBox] = useState(false);
-  const [parsedOptions, setParsedOptions] = useState<string[]>([]);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -83,7 +102,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       setSceneImage(ROLE_SCENES[gameState.role] || ROLE_SCENES.scholar);
       setGamePhase('playing');
     } else {
+      // New game — reset module-level state
       initRef.current = true;
+      messageCounter = 0;
+      lastSceneLocation = '';
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -100,7 +122,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       setTypewriterText(fullText.slice(0, i));
       if (i >= fullText.length) {
         clearInterval(interval);
-        const openingMsg: ChatMessage = { role: 'assistant', content: fullText, timestamp: Date.now() };
+        // Store cleaned narrative + options as buttons
+        const openingMsg: ChatMessage = {
+          role: 'assistant',
+          content: cleanNarrative(fullText),
+          options: extractOptions(fullText),
+          timestamp: Date.now(),
+        };
         setMessages([openingMsg]);
         saveChatHistory([openingMsg]);
         setTimeout(() => setGamePhase('playing'), 300);
@@ -124,7 +152,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }, [gameState]);
 
   async function sendMessage(text: string) {
-    setParsedOptions([]); // Clear options when sending
     if (gameState.actionsToday >= 10) {
       const limitMsg: ChatMessage = { role: 'system', content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。', timestamp: Date.now() };
       setMessages(prev => [...prev, limitMsg]);
@@ -170,9 +197,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               const parsed = JSON.parse(data);
               if (parsed.content) {
                 fullContent += parsed.content;
-                // Real-time tag cleanup during streaming
-                const cleaned = fullContent.replace(/\[SCENE:[^\]]*\]/g, '').replace(/\[MAILBOX\]/g, '').trim();
-                assistantMsg.content = cleaned;
+                // Real-time cleanup during streaming (strips tags + option lines)
+                assistantMsg.content = cleanNarrative(fullContent);
                 setMessages([...newMessages, { ...assistantMsg }]);
               }
             } catch { /* skip */ }
@@ -180,26 +206,53 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
-      // Detect [MAILBOX] tag — auto-open letter modal
-      let mailboxTriggered = false;
-      if (fullContent.includes('[MAILBOX]') && !gameState.hasMailbox) {
-        fullContent = fullContent.replace(/\n?\[MAILBOX\][\s\S]*$/, '').trim();
-        assistantMsg.content = fullContent;
-        setMessages([...newMessages, { ...assistantMsg }]);
-        mailboxTriggered = true;
+      // === Extract everything from RAW content, display CLEANED content ===
+      const rawContent = fullContent;
+      const cleanContent = cleanNarrative(rawContent);
+
+      // 1. Scene image — keyword first (stable cache key + preset prompt),
+      //    then [SCENE:] tag fallback for locations not in the keyword list.
+      let matchedKeyword = false;
+      for (const loc of LOCATION_KEYWORDS) {
+        if (rawContent.includes(loc.keyword)) {
+          matchedKeyword = true;
+          if (lastSceneLocation !== loc.keyword) {
+            lastSceneLocation = loc.keyword;
+            generateSceneImage(
+              loc.scene + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
+              loc.keyword,
+            );
+          }
+          break;
+        }
+      }
+      if (!matchedKeyword) {
+        const sceneMatch = rawContent.match(/\[SCENE:([^\]]+)\]/i);
+        if (sceneMatch) {
+          const sceneDesc = sceneMatch[1].trim();
+          const key = 'ai:' + sceneDesc.slice(0, 40);
+          if (lastSceneLocation !== key) {
+            lastSceneLocation = key;
+            generateSceneImage(
+              sceneDesc + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
+              key,
+            );
+          }
+        }
       }
 
-      const updated = updateChapter(gameState, fullContent);
+      // 2. Mailbox trigger (from raw)
+      const mailboxTriggered = rawContent.includes('[MAILBOX]');
+      const updated = updateChapter(gameState, rawContent);
 
-      // Handle mailbox trigger — directly open letter, skip button
-      if (mailboxTriggered || (fullContent.includes('陶器') && !updated.hasMailbox) || (fullContent.includes('发光') && fullContent.includes('邮箱') && !updated.hasMailbox)) {
+      if ((mailboxTriggered || (rawContent.includes('陶器') && rawContent.includes('发光'))) && !gameState.hasMailbox) {
         updated.hasMailbox = true;
         updated.chapter = 'mailbox_found';
         updated.events = [...updated.events, '发现邮箱'];
-        // Save state first, then auto-open letter after a brief pause
+        assistantMsg.content = cleanContent;
         onStateChange(updated);
         saveGameState(updated);
-        const finalMsgs = [...newMessages, { ...assistantMsg, content: fullContent }];
+        const finalMsgs = [...newMessages, { ...assistantMsg, content: cleanContent }];
         saveChatHistory(finalMsgs);
         setMessages(finalMsgs);
         setIsStreaming(false);
@@ -207,7 +260,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         return;
       }
 
-      // After replying to letter, new letter arrives after 5 more interactions
+      // 3. New letter after replying (every 5 interactions)
       if (updated.chapter === 'letter_replied' && updated.unreadLetters === 0) {
         const msgsSinceLastLetter = messageCounter - (updated.letterHistory.length * 3);
         if (msgsSinceLastLetter >= 5) {
@@ -216,42 +269,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
-      // Scene image: detect [SCENE:...] tag from AI (multiline-safe)
-      const sceneMatch = fullContent.match(/\[SCENE:([^\]]+)\]/);
-      if (sceneMatch) {
-        const sceneDesc = sceneMatch[1].trim();
-        if (sceneDesc !== lastSceneLocation) {
-          lastSceneLocation = sceneDesc;
-          generateSceneImage(sceneDesc + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.');
-        }
-      } else {
-        for (const loc of LOCATION_KEYWORDS) {
-          if (fullContent.includes(loc.keyword) && lastSceneLocation !== loc.keyword) {
-            lastSceneLocation = loc.keyword;
-            generateSceneImage(loc.scene);
-            break;
-          }
-        }
-      }
+      // 4. Options (from raw) — stored on the message for persistence
+      const opts = extractOptions(rawContent);
 
-      // Clean ALL tags from displayed content (final pass)
-      fullContent = fullContent.replace(/\n?\[SCENE:[^\]]*\]/g, '').replace(/\n?\[MAILBOX\]/g, '').trim();
-
-      // Parse AI options like 【选项A】text into clickable buttons
-      const optionMatches = fullContent.match(/【选项[A-Z]】([^\n【]+)/g);
-      if (optionMatches) {
-        const options = optionMatches.map(m => m.replace(/【选项[A-Z]】/, '').trim());
-        setParsedOptions(options);
-      } else {
-        setParsedOptions([]);
-      }
-
-      assistantMsg.content = fullContent;
-      setMessages([...newMessages, { ...assistantMsg }]);
-
+      // 5. Display cleaned content + options on message
+      assistantMsg.content = cleanContent;
+      assistantMsg.options = opts;
       onStateChange(updated);
       saveGameState(updated);
-      const finalMessages = [...newMessages, { ...assistantMsg, content: fullContent }];
+      const finalMessages = [...newMessages, { ...assistantMsg, content: cleanContent, options: opts }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
     } catch (err) {
@@ -322,7 +348,14 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }, 800);
   }
 
-  async function generateSceneImage(scene: string) {
+  // Generate scene image with caching. cacheKey identifies the location;
+  // if already generated, reuse instantly instead of regenerating.
+  async function generateSceneImage(scene: string, cacheKey: string) {
+    const cache = loadSceneCache();
+    if (cache[cacheKey]) {
+      setSceneImage(cache[cacheKey]);
+      return;
+    }
     setImageLoading(true);
     try {
       const res = await fetch('/api/image', {
@@ -331,7 +364,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         body: JSON.stringify({ scene }),
       });
       const data = await res.json();
-      if (data.url) setSceneImage(data.url);
+      if (data.url) {
+        setSceneImage(data.url);
+        cache[cacheKey] = data.url;
+        saveSceneCache(cache);
+      }
     } catch { /* silently fail */ }
     setImageLoading(false);
   }
@@ -347,16 +384,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       e.preventDefault();
       handleSubmit(e);
     }
-  }
-
-  function getQuickActions(): string[] {
-    if (gameState.chapter === 'arrival') {
-      if (gameState.location === '长安城门外') return ['找一家客栈', '去西市转转', '四处看看'];
-      return ['找一间客栈', '去西市看看', '随便走走'];
-    }
-    if (gameState.chapter === 'mailbox_found') return ['打开邮箱看看', '先不管它', '仔细端详这个陶器'];
-    if (gameState.hasMailbox && gameState.unreadLetters > 0) return ['查看邮箱', '继续探索', '找人聊聊'];
-    return ['四处走走', '找人聊聊', '回客栈休息'];
   }
 
   const roleInfo = ROLES[gameState.role];
@@ -474,20 +501,25 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
 
-      {/* Parsed AI options as clickable buttons */}
-      {!isStreaming && !showMailbox && parsedOptions.length > 0 && (
-        <div className="px-5 pb-2 flex flex-col gap-2 flex-none z-10">
-          {parsedOptions.map((option, i) => (
-            <button
-              key={i}
-              onClick={() => { setParsedOptions([]); sendMessage(option); }}
-              className="w-full text-left px-4 py-2 rounded-lg bg-amber-900/15 border border-amber-800/20 text-amber-400/70 text-sm hover:bg-amber-800/25 hover:text-amber-300/80 transition-colors"
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* AI options as clickable buttons — from last assistant message */}
+      {(() => {
+        const lastMsg = messages[messages.length - 1];
+        const currentOptions = (!isStreaming && lastMsg?.role === 'assistant' && lastMsg.options) ? lastMsg.options : [];
+        if (showMailbox || currentOptions.length === 0) return null;
+        return (
+          <div className="px-5 pb-2 flex flex-col gap-2 flex-none z-10">
+            {currentOptions.map((option, i) => (
+              <button
+                key={i}
+                onClick={() => sendMessage(option)}
+                className="w-full text-left px-4 py-2 rounded-lg bg-amber-900/15 border border-amber-800/20 text-amber-400/70 text-sm hover:bg-amber-800/25 hover:text-amber-300/80 transition-colors"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="flex-none px-4 pb-4 pt-2 z-10">

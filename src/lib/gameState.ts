@@ -2,6 +2,22 @@ import { PlayerState, INITIAL_STATE } from './prompts';
 
 const STORAGE_KEY = 'letters-from-changan-state';
 const HISTORY_KEY = 'letters-from-changan-history';
+const SCENE_CACHE_KEY = 'letters-from-changan-scenes';
+
+// Scene image cache: location key → image URL (persists across sessions)
+export function loadSceneCache(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(SCENE_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function saveSceneCache(cache: Record<string, string>): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SCENE_CACHE_KEY, JSON.stringify(cache));
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -9,6 +25,7 @@ export interface ChatMessage {
   timestamp: number;
   isLetter?: boolean;
   sceneImage?: string;
+  options?: string[];
 }
 
 export function loadGameState(): (PlayerState & { role: string }) | null {

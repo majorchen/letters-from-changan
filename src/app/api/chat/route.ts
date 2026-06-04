@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       messages: allMessages,
       stream: true,
       temperature: 0.85,
-      max_tokens: 800,
+      max_tokens: 1000,
     });
 
     const encoder = new TextEncoder();

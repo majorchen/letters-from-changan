@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { IMAGE_PROMPT_SUFFIX } from '@/lib/prompts';
 
+export const maxDuration = 60;
+
 function getClient() {
   return new OpenAI({
     apiKey: process.env.AGNES_API_KEY || '',
@@ -12,7 +14,8 @@ function getClient() {
 export async function POST(req: NextRequest) {
   const { scene } = await req.json();
 
-  const prompt = `${scene}. ${IMAGE_PROMPT_SUFFIX}`;
+  // Avoid double-applying the style suffix if caller already included it
+  const prompt = scene.includes('aged silk') ? scene : `${scene}. ${IMAGE_PROMPT_SUFFIX}`;
 
   try {
     const response = await getClient().images.generate({
