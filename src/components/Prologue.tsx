@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 
 interface Props {
   role: string;
-  onComplete: (bgUrl: string | null) => void;
+  onComplete: (bgUrl: string) => void;
 }
 
 const ROLE_SEASON: Record<string, string> = {
@@ -21,46 +21,36 @@ const ROLE_ATMOSPHERE: Record<string, string> = {
   scholar: '有人在城门口念诗，声音被人群淹没了。',
 };
 
-const SCENE_PROMPTS: Record<string, string> = {
-  merchant: 'Tang Dynasty Chang an Zhuque Gate at golden autumn sunset, a lone merchant with thin horse approaching the massive gate, Silk Road caravans with camels in background, warm amber light, painted on aged silk',
-  musician: 'Tang Dynasty Chang an city gate in late spring twilight, a young musician carrying a pipa lute walking toward the gate, cherry blossoms floating in warm breeze, golden hour light, Dunhuang fresco style',
-  wanderer: 'Tang Dynasty Chang an Zhuque Gate in early winter dusk, a wandering swordsman in worn clothes standing before the massive gate, cold blue-gold light, long shadows, painted on aged silk texture',
-  scholar: 'Tang Dynasty Chang an gate in summer morning, a young scholar in white robes clutching scrolls approaching the grand city gate, bright warm sunlight, bustling crowd, Dunhuang fresco colors',
+const ROLE_SCENES: Record<string, string> = {
+  merchant: '/scene-merchant.webp',
+  musician: '/scene-musician.webp',
+  wanderer: '/scene-wanderer.webp',
+  scholar: '/scene-scholar.webp',
 };
 
 export default function Prologue({ role, onComplete }: Props) {
   const [phase, setPhase] = useState<'dark' | 'text' | 'atmosphere' | 'fade'>('dark');
-  const [bgUrl, setBgUrl] = useState<string | null>(null);
-  const bgRef = useRef<string | null>(null);
+  const bgUrl = ROLE_SCENES[role] || ROLE_SCENES.scholar;
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const completed = useRef(false);
 
-  // Load background image
+  // Preload image
   useEffect(() => {
-    const prompt = SCENE_PROMPTS[role] || SCENE_PROMPTS.scholar;
-    fetch('/api/image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        scene: prompt + '. Warm amber-gold palette, soft diffused side lighting, textured painterly digital art with visible brushwork and grain. 16:9 wide cinematic composition.',
-      }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.url) {
-          bgRef.current = data.url;
-          setBgUrl(data.url);
-        }
-      })
-      .catch(() => {});
-  }, [role]);
+    const img = new Image();
+    img.onload = () => setImgLoaded(true);
+    img.src = bgUrl;
+  }, [bgUrl]);
 
-  // Fixed 6-second sequence, never waits for image
+  // Fixed 5.7-second sequence
   useEffect(() => {
     const t1 = setTimeout(() => setPhase('text'), 800);
     const t2 = setTimeout(() => setPhase('atmosphere'), 2500);
     const t3 = setTimeout(() => setPhase('fade'), 5000);
     const t4 = setTimeout(() => {
-      // Read ref at callback time, not at closure time
-      onComplete(bgRef.current);
+      if (!completed.current) {
+        completed.current = true;
+        onComplete(bgUrl);
+      }
     }, 5700);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,7 +61,7 @@ export default function Prologue({ role, onComplete }: Props) {
 
   return (
     <div className="h-full relative overflow-hidden bg-stone-950 flex items-center justify-center">
-      {bgUrl && (
+      {imgLoaded && (
         <div
           className="absolute inset-0 transition-opacity duration-[2000ms]"
           style={{ opacity: phase === 'atmosphere' || phase === 'fade' ? 0.4 : 0 }}

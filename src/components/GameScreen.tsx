@@ -20,9 +20,17 @@ const OPENING_NARRATIONS: Record<string, string> = {
   scholar: '你抖了抖衣袖上的尘土，站在朱雀门外。怀里揣着一卷自己写的策论，纸张边角已经被汗水浸软。长安城——你在书里读过无数遍的名字，此刻就矗立在眼前。城门比你想象的还要高，门洞里回荡着嘈杂的人声。一个守门的年轻兵卒看了看你的书生打扮，态度还算客气——"来长安赶考的？""不，来长安……看看。"\n\n他有些意外，但还是让开了路。你理了理衣冠，走了进去。',
 };
 
-// Key story moments that deserve an image
-const SCENE_TRIGGERS = ['第一次进入', '客栈', '邮箱发光', '西市', '东市', '收到信'];
+const ROLE_SCENES: Record<string, string> = {
+  merchant: '/scene-merchant.webp',
+  musician: '/scene-musician.webp',
+  wanderer: '/scene-wanderer.webp',
+  scholar: '/scene-scholar.webp',
+};
+
+const MAILBOX_INJECTION = '\n\n你走进房间，把行李放下。正要歇脚时，目光扫过角落——那里有一个奇怪的陶器，像是唐三彩的釉色，琥珀、乳白、翠绿交错。它不像花瓶，更像是……一个邮箱？你凑近看，陶器的开口处似乎有微弱的金色光芒在流动。';
+
 let messageCounter = 0;
+let mailboxInjected = false;
 
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
   const [gamePhase, setGamePhase] = useState<'prologue' | 'typewriter' | 'playing'>('prologue');
@@ -38,7 +46,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const initRef = useRef(false);
 
   const scrollToBottom = useCallback(() => {
@@ -55,21 +62,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }, []);
 
-  // Check if this is a new game or a save
   useEffect(() => {
     if (initRef.current) return;
     const history = loadChatHistory();
     if (history.length > 0) {
       initRef.current = true;
+      setSceneImage(ROLE_SCENES[gameState.role] || ROLE_SCENES.scholar);
       setGamePhase('playing');
     } else {
       initRef.current = true;
-      // New game: show prologue first
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Typewriter effect for opening narration
+  // Typewriter for opening
   useEffect(() => {
     if (gamePhase !== 'typewriter') return;
     const opening = OPENING_NARRATIONS[gameState.role] || OPENING_NARRATIONS.scholar;
@@ -81,12 +87,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       setTypewriterText(fullText.slice(0, i));
       if (i >= fullText.length) {
         clearInterval(interval);
-        // Save as first message and transition to playing
-        const openingMsg: ChatMessage = {
-          role: 'assistant',
-          content: fullText,
-          timestamp: Date.now(),
-        };
+        const openingMsg: ChatMessage = { role: 'assistant', content: fullText, timestamp: Date.now() };
         setMessages([openingMsg]);
         saveChatHistory([openingMsg]);
         setTimeout(() => setGamePhase('playing'), 300);
@@ -96,8 +97,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gamePhase]);
 
-  const handlePrologueComplete = useCallback((bgUrl: string | null) => {
-    if (bgUrl) setSceneImage(bgUrl);
+  const handlePrologueComplete = useCallback((bgUrl: string) => {
+    setSceneImage(bgUrl);
     setGamePhase('typewriter');
   }, []);
 
@@ -111,18 +112,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   async function sendMessage(text: string) {
     if (gameState.actionsToday >= 10) {
-      const limitMsg: ChatMessage = {
-        role: 'system',
-        content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。',
-        timestamp: Date.now(),
-      };
+      const limitMsg: ChatMessage = { role: 'system', content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。', timestamp: Date.now() };
       setMessages(prev => [...prev, limitMsg]);
       saveChatHistory([...messages, limitMsg]);
       return;
     }
 
     messageCounter++;
-
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -168,36 +164,36 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
-      // Force mailbox discovery on 3rd interaction if still in arrival
-      if (messageCounter >= 3 && gameState.chapter === 'arrival' && !gameState.hasMailbox) {
-        fullContent += '\n\n你走进房间，把行李放下。正要歇脚时，目光扫过角落——那里有一个奇怪的陶器，像是唐三彩的釉色，琥珀、乳白、翠绿交错。它不像花瓶，更像是……一个邮箱？你凑近看，陶器的开口处似乎有微弱的金色光芒在流动。';
-        // Update the displayed message
+      // Force mailbox on 3rd message (only once)
+      if (messageCounter >= 3 && !mailboxInjected && gameState.chapter === 'arrival' && !gameState.hasMailbox) {
+        mailboxInjected = true;
+        fullContent += MAILBOX_INJECTION;
         assistantMsg.content = fullContent;
         setMessages([...newMessages, { ...assistantMsg }]);
       }
 
       const updated = updateChapter(gameState, fullContent);
 
-      // Generate image on key story moments
-      if (messageCounter === 1 || messageCounter % 5 === 0 || updated.chapter !== gameState.chapter) {
-        const sceneDesc = fullContent.slice(0, 150).replace(/【.*?】/g, '');
-        generateSceneImage(`Tang Dynasty Chang'an, ${sceneDesc}`);
-      }
-
-      // Mailbox state update
-      if (!gameState.hasMailbox && updated.hasMailbox) {
+      // When mailbox is found, immediately show the button
+      if (updated.hasMailbox && !gameState.hasMailbox) {
         updated.unreadLetters = 1;
         setShowMailbox(true);
       }
-      // Letter arrives every 5 messages after first letter
+
+      // After replying to letter, trigger new letter every 5 msgs
       if (updated.chapter === 'letter_replied' && messageCounter % 5 === 0) {
         updated.unreadLetters = 1;
         setShowMailbox(true);
       }
 
+      // Generate new scene image on chapter change
+      if (updated.chapter !== gameState.chapter) {
+        const sceneDesc = fullContent.slice(0, 150).replace(/【.*?】/g, '');
+        generateSceneImage(`Tang Dynasty Chang'an, ${sceneDesc}`);
+      }
+
       onStateChange(updated);
       saveGameState(updated);
-
       const finalMessages = [...newMessages, { ...assistantMsg, content: fullContent }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
@@ -216,15 +212,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox(false);
 
     try {
-      // Fix #6: Always pass full letter history to avoid duplicate content
       const currentHistory = gameState.letterHistory || [];
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          playerReply: null,
-          letterHistory: currentHistory,
-        }),
+        body: JSON.stringify({ playerReply: null, letterHistory: currentHistory }),
       });
       const data = await res.json();
       const content = data.content || '（信纸上的字迹模糊不清...）';
@@ -253,11 +245,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     onStateChange(updated);
     saveGameState(updated);
 
-    const replyMsg: ChatMessage = {
-      role: 'system',
-      content: '📮 你将回信投入了邮箱。信纸在金光中消失了。',
-      timestamp: Date.now(),
-    };
+    const replyMsg: ChatMessage = { role: 'system', content: '📮 你将回信投入了邮箱。信纸在金光中消失了。', timestamp: Date.now() };
     const newMessages = [...messages, replyMsg];
     setMessages(newMessages);
     saveChatHistory(newMessages);
@@ -303,23 +291,21 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   const roleInfo = ROLES[gameState.role];
 
-  // Prologue phase
+  // Prologue
   if (gamePhase === 'prologue') {
     return <Prologue role={gameState.role} onComplete={handlePrologueComplete} />;
   }
 
-  // Typewriter phase — cinematic opening
+  // Typewriter opening
   if (gamePhase === 'typewriter') {
     return (
       <div className="h-full relative overflow-hidden bg-stone-950">
-        {/* Background image if loaded */}
         {sceneImage && (
-          <div className="absolute inset-0">
-            <img src={sceneImage} alt="" className="w-full h-full object-cover opacity-30" />
-            <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-stone-950/40" />
+          <div className="absolute inset-x-0 top-0 h-[35vh]">
+            <img src={sceneImage} alt="" className="w-full h-full object-cover opacity-40" />
+            <div className="absolute inset-0 bg-gradient-to-b from-stone-950/20 via-transparent to-stone-950" />
           </div>
         )}
-        {/* Typewriter text */}
         <div className="absolute inset-0 flex items-end pb-24 px-6">
           <div className="max-w-lg mx-auto w-full">
             <div className="text-amber-100/80 text-sm leading-relaxed whitespace-pre-wrap">
@@ -332,81 +318,74 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     );
   }
 
+  // Main game — no bubbles, no top bar, pure text layout
   return (
-    <div className="h-full flex flex-col relative">
-      {/* Header with location */}
-      <div className="flex-none px-4 py-3 bg-gradient-to-b from-stone-900 to-stone-900/95 border-b border-amber-900/20 flex items-center justify-between z-10">
-        <button onClick={onExit} className="text-amber-600/50 text-xs hover:text-amber-400">
+    <div className="h-full flex flex-col relative bg-stone-950">
+      {/* Scene image — fixed top 35vh */}
+      {sceneImage && (
+        <div className="absolute inset-x-0 top-0 h-[35vh] z-0 pointer-events-none">
+          <img
+            src={sceneImage}
+            alt=""
+            className="w-full h-full object-cover opacity-40 transition-opacity duration-1000"
+            onError={() => setSceneImage(null)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-stone-950/10 via-transparent to-stone-950" />
+        </div>
+      )}
+      {imageLoading && (
+        <div className="absolute inset-x-0 top-2 z-20 text-center">
+          <span className="text-amber-600/20 text-xs">场景浮现中...</span>
+        </div>
+      )}
+
+      {/* Floating header — no bar, transparent */}
+      <div className="flex-none px-5 pt-4 pb-2 flex items-start justify-between z-10 relative">
+        <button onClick={onExit} className="text-amber-600/30 text-xs hover:text-amber-400 transition-colors">
           ← 离开
         </button>
         <div className="text-center">
-          <div className="text-amber-300/80 text-sm font-medium">{gameState.location}</div>
-          <div className="text-amber-600/40 text-xs">天宝元年 · {roleInfo?.name || '旅人'}</div>
+          <div className="text-amber-400/50 text-xs font-medium">{gameState.location}</div>
+          <div className="text-amber-600/20 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {gameState.letterHistory.length > 0 && (
-            <button
-              onClick={() => setShowLetterBox(true)}
-              className="text-amber-500/50 hover:text-amber-400 text-base"
-              title="信匣"
-            >
+            <button onClick={() => setShowLetterBox(true)} className="text-amber-500/30 hover:text-amber-400 text-sm" title="信匣">
               📜
             </button>
           )}
-          <span className="text-amber-600/40 text-xs">{gameState.actionsToday}/10</span>
+          <span className="text-amber-600/20 text-[10px]">{gameState.actionsToday}/10</span>
         </div>
       </div>
 
-      {/* Fix #2: Chat area with scene image as background */}
-      <div className="flex-1 relative overflow-hidden">
-        {/* Scene image as background */}
-        {sceneImage && (
-          <div className="absolute inset-x-0 top-0 h-60 z-0 pointer-events-none">
-            <img src={sceneImage} alt="" className="w-full h-full object-cover" onError={() => setSceneImage(null)} />
-            <div className="absolute inset-0 bg-gradient-to-b from-stone-950/30 via-stone-950/60 to-stone-950" />
-          </div>
-        )}
-        {imageLoading && !sceneImage && (
-          <div className="absolute inset-x-0 top-0 h-8 flex items-center justify-center z-0">
-            <span className="text-amber-600/30 text-xs">场景浮现中...</span>
-          </div>
-        )}
+      {/* Text area — no bubbles, pure literary layout with fade mask */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4 z-10 relative text-fade-mask">
+        {/* Spacer to push content below the image */}
+        <div className="h-[25vh]" />
 
-        {/* Chat messages */}
-        <div ref={scrollRef} className="absolute inset-0 overflow-y-auto chat-scroll px-4 py-4 space-y-4 z-10">
-          {/* Spacer when scene image is showing */}
-          {sceneImage && <div className="h-36" />}
-
+        <div className="max-w-lg mx-auto space-y-5">
           {messages.map((msg, i) => (
             <div
               key={i}
               className={`animate-fade-in-up ${
-                msg.role === 'user' ? 'flex justify-end' : msg.role === 'system' ? 'flex justify-center' : 'flex justify-start'
+                msg.role === 'user' ? 'text-right' : msg.role === 'system' ? 'text-center' : 'text-left'
               }`}
             >
               {msg.role === 'system' ? (
-                <div className="text-amber-500/50 text-xs text-center px-4 py-2 bg-amber-900/10 rounded-full">
-                  {msg.content}
-                </div>
+                <span className="text-amber-500/30 text-xs">{msg.content}</span>
               ) : msg.role === 'user' ? (
-                <div className="max-w-[80%] bg-amber-800/25 border border-amber-700/20 rounded-2xl rounded-br-md px-4 py-2.5 text-amber-100/90 text-sm backdrop-blur-sm">
-                  {msg.content}
-                </div>
+                <span className="text-amber-300/90 text-sm">{msg.content}</span>
               ) : (
-                <div className="max-w-[85%] bg-stone-900/80 border border-stone-700/30 rounded-2xl rounded-bl-md px-4 py-3 text-amber-100/80 text-sm leading-relaxed whitespace-pre-wrap backdrop-blur-sm">
-                  {msg.content}
-                </div>
+                <p className="text-amber-100/70 text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
               )}
             </div>
           ))}
 
           {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
-            <div className="flex justify-start">
-              <div className="bg-stone-900/80 border border-stone-700/30 rounded-2xl px-4 py-3 flex gap-1 backdrop-blur-sm">
-                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-                <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-              </div>
+            <div className="flex gap-1">
+              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/40" />
+              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/40" />
+              <span className="typing-dot w-1.5 h-1.5 rounded-full bg-amber-400/40" />
             </div>
           )}
         </div>
@@ -414,25 +393,25 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       {/* Mailbox notification */}
       {showMailbox && (
-        <div className="px-4 pb-2">
+        <div className="px-5 pb-2 z-10">
           <button
             onClick={openLetter}
-            className="w-full py-3 rounded-xl bg-amber-700/20 border border-amber-500/30 text-amber-300 text-sm animate-pulse-glow flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-amber-700/15 border border-amber-500/20 text-amber-300/80 text-sm animate-pulse-glow flex items-center justify-center gap-2"
           >
             <span className="text-lg">📮</span>
-            邮箱在发光...有新的信件
+            邮箱在发光...
           </button>
         </div>
       )}
 
       {/* Quick actions */}
       {!isStreaming && (
-        <div className="px-4 pb-2 flex gap-2 overflow-x-auto flex-none">
+        <div className="px-5 pb-2 flex gap-2 overflow-x-auto flex-none z-10">
           {getQuickActions().map((action) => (
             <button
               key={action}
               onClick={() => sendMessage(action)}
-              className="flex-none px-3 py-1.5 rounded-full bg-amber-900/20 border border-amber-800/25 text-amber-400/70 text-xs hover:bg-amber-800/30 hover:text-amber-300 transition-colors whitespace-nowrap"
+              className="flex-none px-3 py-1.5 rounded-full bg-amber-900/15 border border-amber-800/15 text-amber-500/50 text-xs hover:bg-amber-800/20 hover:text-amber-300/70 transition-colors whitespace-nowrap"
             >
               {action}
             </button>
@@ -441,45 +420,33 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex-none px-4 pb-4 pt-2">
-        <div className="flex gap-2 items-end">
+      <form onSubmit={handleSubmit} className="flex-none px-5 pb-5 pt-2 z-10">
+        <div className="flex gap-2 items-end max-w-lg mx-auto">
           <textarea
-            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="说点什么..."
             rows={1}
             disabled={isStreaming}
-            className="flex-1 bg-stone-800/50 border border-amber-900/20 rounded-xl px-4 py-2.5 text-sm text-amber-100/90 placeholder:text-amber-700/30 resize-none focus:outline-none focus:border-amber-700/40 disabled:opacity-50"
+            className="flex-1 bg-transparent border-b border-amber-800/20 px-1 py-2 text-sm text-amber-100/80 placeholder:text-amber-700/20 resize-none focus:outline-none focus:border-amber-600/40 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming}
-            className="flex-none w-10 h-10 rounded-xl bg-amber-700/30 border border-amber-600/30 flex items-center justify-center text-amber-300 hover:bg-amber-700/50 transition-colors disabled:opacity-30"
+            className="flex-none text-amber-500/40 hover:text-amber-300 transition-colors disabled:opacity-20 text-sm pb-2"
           >
             ↑
           </button>
         </div>
       </form>
 
-      {/* Letter modal */}
+      {/* Modals */}
       {showLetter && (
-        <LetterModal
-          content={letterContent}
-          isLoading={letterLoading}
-          onClose={() => setShowLetter(false)}
-          onReply={handleReply}
-          canReply={true}
-        />
+        <LetterModal content={letterContent} isLoading={letterLoading} onClose={() => setShowLetter(false)} onReply={handleReply} canReply={true} />
       )}
-
-      {/* Letter box */}
       {showLetterBox && (
-        <LetterBox
-          letters={gameState.letterHistory}
-          onClose={() => setShowLetterBox(false)}
-        />
+        <LetterBox letters={gameState.letterHistory} onClose={() => setShowLetterBox(false)} />
       )}
     </div>
   );

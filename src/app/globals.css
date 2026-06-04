@@ -17,11 +17,12 @@
 }
 
 body {
-  font-family: 'Noto Serif SC', serif;
+  font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', 'STSong', serif;
 }
 
 .font-handwriting {
-  font-family: 'Ma Shan Zheng', cursive;
+  font-family: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', cursive;
+  font-display: swap;
 }
 
 .letter-paper {
@@ -49,6 +50,12 @@ body {
 .chat-scroll::-webkit-scrollbar-thumb {
   background: rgba(212, 165, 116, 0.3);
   border-radius: 1px;
+}
+
+/* Text fade mask for scrolling over image */
+.text-fade-mask {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
 }
 
 @keyframes fadeInUp {
