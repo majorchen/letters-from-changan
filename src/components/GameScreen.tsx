@@ -359,29 +359,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     );
   }
 
-  // Main game — no bubbles, no top bar, pure text layout
+  // Main game — literary text layout
   return (
-    <div className="h-full flex flex-col relative bg-stone-950">
-      {/* Scene image — fixed top 35vh */}
-      {sceneImage && (
-        <div className="absolute inset-x-0 top-0 h-[35vh] z-0 pointer-events-none">
-          <img
-            src={sceneImage}
-            alt=""
-            className="w-full h-full object-cover opacity-40 transition-opacity duration-1000"
-            onError={() => setSceneImage(null)}
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-stone-950/10 via-transparent to-stone-950" />
-        </div>
-      )}
-      {imageLoading && (
-        <div className="absolute inset-x-0 top-2 z-20 text-center">
-          <span className="text-amber-600/20 text-xs">场景浮现中...</span>
-        </div>
-      )}
-
-      {/* Header bar — semi-transparent, shows through to scene image */}
-      <div className="flex-none px-4 py-3 bg-stone-950/60 backdrop-blur-sm border-b border-amber-900/10 flex items-center justify-between z-10 relative">
+    <div className="h-full flex flex-col bg-stone-950">
+      {/* Header bar */}
+      <div className="flex-none px-4 py-3 bg-stone-950 border-b border-amber-900/10 flex items-center justify-between z-10">
         <button onClick={onExit} className="text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
           ← 离开
         </button>
@@ -399,10 +381,26 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       </div>
 
-      {/* Text area — no bubbles, pure literary layout with fade mask */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4 z-10 relative text-fade-mask">
-        {/* Spacer to push content below the image */}
-        <div className="h-[25vh]" />
+      {/* Scene image — between header and text, not overlapping */}
+      {sceneImage && (
+        <div className="flex-none h-[30vh] relative">
+          <img
+            src={sceneImage}
+            alt=""
+            className="w-full h-full object-cover opacity-50 transition-opacity duration-1000"
+            onError={() => setSceneImage(null)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
+        </div>
+      )}
+      {!sceneImage && imageLoading && (
+        <div className="flex-none h-12 flex items-center justify-center">
+          <span className="text-amber-600/20 text-xs">场景浮现中...</span>
+        </div>
+      )}
+
+      {/* Text area — no bubbles, pure literary layout */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4">
 
         <div className="max-w-lg mx-auto space-y-5">
           {messages.map((msg, i) => (
