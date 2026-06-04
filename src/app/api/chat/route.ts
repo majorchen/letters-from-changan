@@ -36,6 +36,7 @@ function normalizePlayerState(value: unknown): PlayerState | null {
     events: Array.isArray(state.events) ? state.events.filter((item): item is string => typeof item === 'string').slice(0, 40) : [],
     narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary.slice(0, 500) : '',
     npcMemories: state.npcMemories && typeof state.npcMemories === 'object' ? state.npcMemories : {},
+    eventVersions: state.eventVersions && typeof state.eventVersions === 'object' ? state.eventVersions : {},
     storyTime: {
       day: Number.isFinite(state.storyTime?.day) ? Number(state.storyTime?.day) : storyTime.day,
       period: state.storyTime?.period && STORY_PERIODS.includes(state.storyTime.period) ? state.storyTime.period : storyTime.period,

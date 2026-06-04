@@ -194,6 +194,17 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
         };
       }
     }
+    if (key === 'EVENT_VERSION' && value.toLowerCase() !== 'none') {
+      update.eventVersions = {};
+      for (const rawEntry of value.split(/[;；]/)) {
+        const [event, source, version] = rawEntry.split('|').map(item => item.trim());
+        if (!event || !source || !version) continue;
+        update.eventVersions[event] = {
+          ...(update.eventVersions[event] || {}),
+          [source]: version,
+        };
+      }
+    }
     if (key === 'INPUT') {
       const inputMode = value.toLowerCase();
       if (inputMode === 'options' || inputMode === 'free') {

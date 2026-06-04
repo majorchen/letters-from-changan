@@ -34,6 +34,7 @@ NPCS: 新认识或本轮重要NPC，用中文逗号分隔；没有则写 none
 EVENTS: 本轮新增事件代码，用英文 snake_case；没有则写 none
 SUMMARY: 用一句话更新到目前为止的叙事摘要，包含玩家最新决定；不要超过80字
 NPC_MEMORY: 本轮重要NPC记忆，格式为 NPC名|态度|新事实；多个用分号分隔；没有则写 none
+EVENT_VERSION: 事件名|来源|这个来源的说法；多个用分号分隔；没有则写 none
 INPUT: options / free
 MAILBOX: none / pending_first_open / unread / quiet
 [/STATE]
@@ -120,6 +121,7 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
 - 当前幕：${storyPhase.label}
 - 已认识的NPC：${playerState.knownNPCs.join("、") || "无"}
 - 已触发事件：${playerState.events.join("、") || "无"}
+- 事件版本：${formatEventVersions(playerState.eventVersions)}
 - 叙事摘要：${playerState.narrativeSummary || "暂无"}
 - NPC记忆：${formatNpcMemories(playerState.npcMemories)}
 - 自由输入次数：${playerState.freeInputCount || 0}/3
@@ -143,7 +145,10 @@ ${sliceOfLifeGuide}
 
 ## 自由输入控制
 默认必须给选项并写 INPUT: options。只有在林深提出私人问题、NPC直视玩家等待回答、或锚点矛盾需要玩家亲自表态时，才可以写 INPUT: free 并不给选项。
-如果自由输入次数已达到3次，或距离上次自由输入太近，不要再写 INPUT: free。`;
+如果自由输入次数已达到3次，或距离上次自由输入太近，不要再写 INPUT: free。
+
+## 矛盾记录
+当林深、NPC或环境对同一件事给出不同说法时，不要急着纠正或解释。把不同说法写入 EVENT_VERSION，让矛盾成为可追踪线索。`;
 }
 
 function getSliceOfLifeGuide(state: PlayerState): string {
@@ -363,6 +368,7 @@ export interface PlayerState {
   events: string[];
   narrativeSummary: string;
   npcMemories: Record<string, NpcMemory>;
+  eventVersions: Record<string, Record<string, string>>;
   storyTime: StoryTime;
   storyPhase: StoryPhase;
   awaitingFreeInput: boolean;
@@ -431,6 +437,20 @@ function formatNpcMemories(memories: PlayerState["npcMemories"]): string {
     .join("\n");
 }
 
+function formatEventVersions(eventVersions: PlayerState["eventVersions"]): string {
+  const entries = Object.entries(eventVersions || {}).slice(-8);
+  if (entries.length === 0) return "暂无";
+  return entries
+    .map(([event, sources]) => {
+      const sourceText = Object.entries(sources || {})
+        .slice(-4)
+        .map(([source, version]) => `${source}说：${version}`)
+        .join("；");
+      return `${event}：${sourceText}`;
+    })
+    .join("\n");
+}
+
 function formatAnchorFragments(state: PlayerState): string {
   const phase = getStoryPhase(state).phase;
   const seenEvents = new Set(state.events || []);
@@ -487,6 +507,7 @@ export const INITIAL_STATE: Omit<PlayerState, 'role'> = {
   events: [],
   narrativeSummary: "",
   npcMemories: {},
+  eventVersions: {},
   storyTime: {
     day: 1,
     period: "清晨",

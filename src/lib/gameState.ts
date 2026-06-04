@@ -33,6 +33,7 @@ export interface NarrativeStateUpdate {
   events?: string[];
   summary?: string;
   npcMemories?: Record<string, NpcMemory>;
+  eventVersions?: Record<string, Record<string, string>>;
   inputMode?: 'options' | 'free';
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
@@ -94,6 +95,7 @@ function normalizePlayerState(state: PlayerState): PlayerState {
     events: Array.isArray(state.events) ? state.events : [],
     narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary : '',
     npcMemories: state.npcMemories && typeof state.npcMemories === 'object' ? state.npcMemories : {},
+    eventVersions: state.eventVersions && typeof state.eventVersions === 'object' ? state.eventVersions : {},
     storyTime: state.storyTime || INITIAL_STATE.storyTime,
     storyPhase,
     awaitingFreeInput: Boolean(state.awaitingFreeInput),
@@ -376,6 +378,15 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
         }),
       ),
     };
+  }
+  if (narrativeState?.eventVersions) {
+    updated.eventVersions = { ...updated.eventVersions };
+    for (const [event, sources] of Object.entries(narrativeState.eventVersions)) {
+      updated.eventVersions[event] = {
+        ...(updated.eventVersions[event] || {}),
+        ...sources,
+      };
+    }
   }
   if (narrativeState?.inputMode === 'free') {
     const farEnough = updated.turnCount - (updated.lastFreeInputTurn || 0) >= 12;
