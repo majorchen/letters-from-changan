@@ -47,12 +47,15 @@ const LOCATION_KEYWORDS = [
 // Handles unclosed [SCENE: during streaming, and removes 【选项X】 lines.
 function cleanNarrative(text: string): string {
   return text
-    // Remove [SCENE:...] complete or incomplete (streaming) — everything from [SCENE to closing ] or end of string
-    .replace(/\[SCENE:[^\]]*\]?/gi, '')
-    .replace(/\[MAILBOX\]?/gi, '')
-    // Remove option lines 【选项X】...
-    .replace(/【选项[A-Z]?】[^\n]*/g, '')
-    // Collapse extra blank lines
+    // Remove closed [SCENE:...] / [MAILBOX] tags anywhere
+    .replace(/\[SCENE:[^\]]*\]/gi, '')
+    .replace(/\[MAILBOX\]/gi, '')
+    // Truncate from the FIRST option marker to the end (handles mid-stream)
+    .replace(/【\s*选项[\s\S]*$/, '')
+    // Truncate unclosed tags appearing at the end during streaming
+    .replace(/\[SCENE:[\s\S]*$/i, '')
+    .replace(/\[MAILBOX[\s\S]*$/i, '')
+    .replace(/\[\s*$/, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -79,6 +82,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [imageLoading, setImageLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
+
+  // Always-fresh refs to avoid React closure staleness in async callbacks
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -115,18 +124,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     if (gamePhase !== 'typewriter') return;
     const opening = OPENING_NARRATIONS[gameState.role] || OPENING_NARRATIONS.scholar;
     const fullText = opening + '\n\n眼前是宽阔的朱雀大街，人群熙攘。你需要先找个落脚的地方。\n\n【选项A】沿着大街往北走，找一家客栈安顿\n【选项B】先去西市转转，打听行情\n【选项C】在城门附近随便看看';
+    const typeText = cleanNarrative(fullText); // type only narrative, no option text
+    const options = extractOptions(fullText);
     let i = 0;
     setTypewriterText('');
     const interval = setInterval(() => {
       i++;
-      setTypewriterText(fullText.slice(0, i));
-      if (i >= fullText.length) {
+      setTypewriterText(typeText.slice(0, i));
+      if (i >= typeText.length) {
         clearInterval(interval);
-        // Store cleaned narrative + options as buttons
         const openingMsg: ChatMessage = {
           role: 'assistant',
-          content: cleanNarrative(fullText),
-          options: extractOptions(fullText),
+          content: typeText,
+          options,
           timestamp: Date.now(),
         };
         setMessages([openingMsg]);
@@ -152,22 +162,24 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }, [gameState]);
 
   async function sendMessage(text: string) {
-    if (gameState.actionsToday >= 10) {
+    const gs = gameStateRef.current; // always-fresh state (avoids closure staleness)
+    const msgs = messagesRef.current;
+    if (gs.actionsToday >= 10) {
       const limitMsg: ChatMessage = { role: 'system', content: '🌙 今日的长安之旅已尽兴。明天再来继续探索吧。', timestamp: Date.now() };
       setMessages(prev => [...prev, limitMsg]);
-      saveChatHistory([...messages, limitMsg]);
+      saveChatHistory([...msgs, limitMsg]);
       return;
     }
 
     messageCounter++;
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
-    const newMessages = [...messages, userMsg];
+    const newMessages = [...msgs, userMsg];
     setMessages(newMessages);
     setInput('');
     setIsStreaming(true);
 
     const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: Date.now() };
-    const systemPrompt = buildSystemPrompt(gameState.role, gameState);
+    const systemPrompt = buildSystemPrompt(gs.role, gs);
     const apiMessages = newMessages
       .filter(m => m.role !== 'system')
       .slice(-20)
@@ -243,9 +255,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 2. Mailbox trigger (from raw)
       const mailboxTriggered = rawContent.includes('[MAILBOX]');
-      const updated = updateChapter(gameState, rawContent);
+      const updated = updateChapter(gs, rawContent);
 
-      if ((mailboxTriggered || (rawContent.includes('陶器') && rawContent.includes('发光'))) && !gameState.hasMailbox) {
+      if ((mailboxTriggered || (rawContent.includes('陶器') && rawContent.includes('发光'))) && !gs.hasMailbox) {
         updated.hasMailbox = true;
         updated.chapter = 'mailbox_found';
         updated.events = [...updated.events, '发现邮箱'];
@@ -295,7 +307,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox(false);
 
     try {
-      const currentHistory = gameState.letterHistory || [];
+      const gs = gameStateRef.current;
+      const currentHistory = gs.letterHistory || [];
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -306,9 +319,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       setLetterContent(content);
 
       const updated = {
-        ...gameState,
+        ...gs,
         unreadLetters: 0,
-        chapter: gameState.chapter === 'mailbox_found' ? 'first_letter_read' : gameState.chapter,
+        chapter: gs.chapter === 'mailbox_found' ? 'first_letter_read' : gs.chapter,
         letterHistory: [...currentHistory, { from: 'linShen', content, timestamp: Date.now() }],
       };
       onStateChange(updated);
@@ -320,10 +333,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   async function handleReply(reply: string) {
+    const gs = gameStateRef.current;
     const updated = {
-      ...gameState,
+      ...gs,
       chapter: 'letter_replied',
-      letterHistory: [...gameState.letterHistory, { from: 'player', content: reply, timestamp: Date.now() }],
+      letterHistory: [...gs.letterHistory, { from: 'player', content: reply, timestamp: Date.now() }],
     };
     onStateChange(updated);
     saveGameState(updated);
