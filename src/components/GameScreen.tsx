@@ -470,12 +470,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             placeholder="说点什么..."
             rows={1}
             disabled={isStreaming}
-            className="flex-1 bg-stone-800/40 border border-amber-900/20 rounded-xl px-4 py-2.5 text-sm text-amber-100/80 placeholder:text-amber-700/25 resize-none focus:outline-none focus:border-amber-600/30 disabled:opacity-50"
+            className="flex-1 bg-stone-800/60 border border-amber-700/30 rounded-xl px-4 py-2.5 text-sm text-amber-100/90 placeholder:text-amber-600/40 resize-none focus:outline-none focus:border-amber-600/50 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming}
-            className="flex-none w-10 h-10 rounded-xl bg-amber-700/25 border border-amber-600/20 flex items-center justify-center text-amber-300/70 hover:bg-amber-700/40 transition-colors disabled:opacity-20"
+            className="flex-none w-10 h-10 rounded-xl bg-amber-700/40 border border-amber-600/30 flex items-center justify-center text-amber-200 hover:bg-amber-700/50 transition-colors disabled:opacity-30"
           >
             ↑
           </button>
