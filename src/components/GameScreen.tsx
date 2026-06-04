@@ -47,8 +47,7 @@ function cleanNarrative(text: string): string {
     .replace(/\[SCENE:[^\]]*\]/gi, '')
     .replace(/\[MAILBOX\]/gi, '')
     // Truncate from the FIRST option marker to the end (handles mid-stream)
-    .replace(/(?:【\s*选项|^|\n)\s*(?:选项\s*)?[A-C][\.、:：)]\s*[\s\S]*$/i, '')
-    .replace(/(?:^|\n)\s*[1-3][\.、:：)]\s*[\s\S]*$/, '')
+    .replace(/(?:【\s*选项\s*[a-cA-C]?\s*】|(?:^|\n)\s*选项\s*[a-cA-C]\s*[：:]|(?:^|\n)\s*[a-cA-C]\s*[\.、:：)]|(?:^|\n)\s*[1-3]\s*[\.、:：)）])[\s\S]*$/i, '')
     // Truncate unclosed tags appearing at the end during streaming
     .replace(/\[SCENE:[\s\S]*$/i, '')
     .replace(/\[MAILBOX[\s\S]*$/i, '')
@@ -78,15 +77,33 @@ function extractOptions(text: string): string[] {
   return Array.from(new Set(options)).slice(0, 4);
 }
 
-function fallbackOptions(state: PlayerState, content: string): string[] {
+function fallbackOptions(state: PlayerState, content: string, playerInput = ''): string[] {
+  const context = `${playerInput}\n${content}`;
   if (state.chapter === 'mailbox_found' && state.unreadLetters > 0) {
     return ['靠近那只发光的陶器', '先不理会，整理行李', '叫王掌柜来看看'];
   }
-  if (content.includes('客栈') || state.location.includes('客栈')) {
+
+  if (/(问|询问|追问|打听|告诉|解释|为什么|怎么|何人|是谁|哪里|何处)/.test(playerInput)) {
+    return ['继续追问这个细节', '观察对方说话时的神色', '换个角度试探一句'];
+  }
+  if (/(看|观察|检查|查看|摸|靠近|打开|寻找|翻|搜)/.test(playerInput)) {
+    return ['仔细查看异常之处', '把看到的细节记在心里', '询问旁人是否也注意到了'];
+  }
+  if (/(去|走|前往|离开|回|进入|出门|跟|追)/.test(playerInput)) {
+    return ['继续朝那个方向走', '先停下观察周围', '向路边的人打听去处'];
+  }
+  if (/(拒绝|不理|忽视|算了|离远|躲|藏)/.test(playerInput)) {
+    return ['坚持不碰这件事', '暗中观察后续变化', '找个可信的人旁敲侧击'];
+  }
+
+  if (context.includes('客栈') || state.location.includes('客栈')) {
     return ['向王掌柜打听城中消息', '留意身边人的谈话', '出门去西市走走'];
   }
-  if (content.includes('西市') || state.location.includes('西市')) {
+  if (context.includes('西市') || state.location.includes('西市')) {
     return ['找商贩打听消息', '观察人群中的异乡人', '回客栈歇脚'];
+  }
+  if (context.includes('信') || context.includes('林深')) {
+    return ['细想信中不对劲的地方', '把信里的线索告诉一个人', '暂时收起信继续观察长安'];
   }
   return ['继续观察四周', '上前询问身边的人', '换个方向继续走'];
 }
@@ -238,13 +255,17 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       if (!reader) throw new Error('No reader');
+      if (!res.ok) throw new Error(`Chat request failed: ${res.status}`);
 
       let fullContent = '';
+      let pending = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split('\n')) {
+        pending += decoder.decode(value, { stream: true });
+        const lines = pending.split('\n');
+        pending = lines.pop() || '';
+        for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') continue;
@@ -258,6 +279,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               }
             } catch { /* skip */ }
           }
+        }
+      }
+      if (pending.startsWith('data: ')) {
+        const data = pending.slice(6);
+        if (data !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              fullContent += parsed.content;
+              assistantMsg.content = cleanNarrative(fullContent);
+              setMessages([...newMessages, { ...assistantMsg }]);
+            }
+          } catch { /* incomplete tail, skip */ }
         }
       }
 
@@ -314,7 +348,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           updated.events = [...updated.events, '发现邮箱'];
         }
         assistantMsg.content = cleanContent;
-        assistantMsg.options = ensureMailboxOption(fallbackOptions(updated, rawContent), updated);
+        assistantMsg.options = ensureMailboxOption(fallbackOptions(updated, rawContent, text), updated);
         onStateChange(updated);
         saveGameState(updated);
         const finalMsgs = [...newMessages, { ...assistantMsg, content: cleanContent, options: assistantMsg.options }];
@@ -335,7 +369,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 4. Options (from raw) — stored on the message for persistence
       const extractedOptions = extractOptions(rawContent);
-      const opts = ensureMailboxOption(extractedOptions.length > 0 ? extractedOptions : fallbackOptions(updated, rawContent), updated);
+      const opts = ensureMailboxOption(extractedOptions.length > 0 ? extractedOptions : fallbackOptions(updated, rawContent, text), updated);
 
       // 5. Display cleaned content + options on message
       assistantMsg.content = cleanContent;
@@ -358,7 +392,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowLetter(true);
     setLetterLoading(true);
     setShowMailbox(false);
+    setLetterContent('');
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 25000);
     try {
       const gs = gameStateRef.current;
       const currentHistory = gs.letterHistory || [];
@@ -366,8 +403,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerReply: null, letterHistory: currentHistory }),
+        signal: controller.signal,
       });
+      if (!res.ok) throw new Error(`Letter request failed: ${res.status}`);
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       const content = data.content || '（信纸上的字迹模糊不清...）';
       setLetterContent(content);
 
@@ -379,10 +419,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       };
       onStateChange(updated);
       saveGameState(updated);
-    } catch {
-      setLetterContent('（信件似乎被什么力量阻隔了...请再试一次）');
+    } catch (err) {
+      console.error(err);
+      setLetterContent('（信封没有完全打开。也许风从窗缝里吹乱了字迹，请稍后再试。）');
+    } finally {
+      window.clearTimeout(timeoutId);
+      setLetterLoading(false);
     }
-    setLetterLoading(false);
   }
 
   async function handleReply(reply: string) {
@@ -515,15 +558,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
 
       {/* Header bar — compact, translucent, on top of image */}
-      <div className="flex-none px-4 py-1.5 bg-stone-950/50 backdrop-blur-sm flex items-center justify-between z-20 relative">
-        <button onClick={onExit} className="text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
+      <div className="flex-none px-4 py-1.5 bg-stone-950/50 backdrop-blur-sm grid grid-cols-[1fr_auto_1fr] items-center z-20 relative">
+        <button onClick={onExit} className="justify-self-start text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
           ← 离开
         </button>
-        <div className="text-center">
+        <div className="text-center justify-self-center min-w-0">
           <div className="text-amber-300/70 text-xs font-medium">{gameState.location}</div>
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="justify-self-end flex items-center gap-2 min-w-10">
           {gameState.letterHistory.length > 0 && (
             <button onClick={() => setShowLetterBox(true)} className="text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
               📜

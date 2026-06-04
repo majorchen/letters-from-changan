@@ -29,7 +29,12 @@ export default function LetterModal({ content, isLoading, onClose, onReply, canR
 
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-amber-800/60 font-handwriting text-lg">信正在到来...</div>
+              <div className="flex items-center gap-1 text-amber-800/60 font-handwriting text-lg">
+                <span>信正在打开</span>
+                <span className="typing-dot inline-block w-1 h-1 rounded-full bg-amber-800/50" />
+                <span className="typing-dot inline-block w-1 h-1 rounded-full bg-amber-800/50" />
+                <span className="typing-dot inline-block w-1 h-1 rounded-full bg-amber-800/50" />
+              </div>
             </div>
           ) : (
             <>

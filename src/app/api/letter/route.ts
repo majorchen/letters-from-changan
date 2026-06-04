@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { LETTER_WRITER_PROMPT } from '@/lib/prompts';
 
+export const maxDuration = 30;
+
 type LetterItem = {
   from: string;
   content: string;
