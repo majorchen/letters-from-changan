@@ -291,6 +291,21 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setMessages(newMessages);
     saveChatHistory(newMessages);
     setShowLetter(false);
+
+    // Auto-continue narration after letter
+    setTimeout(() => {
+      sendMessage('（我放下信，目光回到窗外的长安……）');
+    }, 800);
+  }
+
+  function handleLetterClose() {
+    setShowLetter(false);
+    // If player just read the letter without replying, also continue narration
+    if (gameState.chapter === 'first_letter_read' || gameState.chapter === 'mailbox_found') {
+      setTimeout(() => {
+        sendMessage('（我收好这封奇怪的信，思绪万千……）');
+      }, 800);
+    }
   }
 
   async function generateSceneImage(scene: string) {
@@ -443,8 +458,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
 
-      {/* Quick actions */}
-      {!isStreaming && (
+      {/* Quick actions — hidden when mailbox is showing */}
+      {!isStreaming && !showMailbox && (
         <div className="px-5 pb-2 flex gap-2 overflow-x-auto flex-none z-10">
           {getQuickActions().map((action) => (
             <button
@@ -482,7 +497,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       {/* Modals */}
       {showLetter && (
-        <LetterModal content={letterContent} isLoading={letterLoading} onClose={() => setShowLetter(false)} onReply={handleReply} canReply={true} />
+        <LetterModal content={letterContent} isLoading={letterLoading} onClose={handleLetterClose} onReply={handleReply} canReply={true} />
       )}
       {showLetterBox && (
         <LetterBox letters={gameState.letterHistory} onClose={() => setShowLetterBox(false)} />
