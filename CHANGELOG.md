@@ -8,7 +8,7 @@
 
 ## 技术栈
 - Next.js 16 + TypeScript + Tailwind CSS 4
-- Agnes API（agnes-2.0-flash 聊天 / agnes-image-2.1-flash 图片）
+- Agnes API（agnes-2.0-flash 聊天 / agnes-image-2.0-flash 图片）
 - Vercel 部署（majorchen 账号）
 - localStorage 状态持久化
 
@@ -52,7 +52,7 @@
 - [x] PWA manifest（standalone，深色主题）
 - [x] 唐三彩邮箱 app icon（favicon 16/32 + apple-touch 180 + PWA 192/512）
 - [x] 字体：Noto Serif SC（next/font/google 本地化）
-- [x] 每日10次行动限制
+- [x] 首版曾包含每日行动限制，v0.2 已移除
 - [x] Agnes API key 通过 Vercel env vars 管理
 
 ---
@@ -60,7 +60,7 @@
 ## v0.2 — 体验与存档调整（2026-06-04）
 
 ### 已处理
-- [x] 首页继续旅程改为多存档列表，支持多角色/多线路继续与删除
+- [x] 首页继续旅程改为存档选择 modal，支持多角色/多线路继续
 - [x] 旧版单存档自动迁移到新多存档结构
 - [x] 移除每日10次行动阻断与顶部次数显示
 - [x] 首次发现邮箱不再自动弹出信件，改为发光选项按钮，玩家可主动选择或忽视
@@ -86,6 +86,10 @@
 - [x] 信匣 icon 从游戏开始即常驻，空信匣显示诗句式空状态
 - [x] 场景图随聊天历史持久化，继续旅程时恢复最后一张场景图
 - [x] 首页加载动效改为标题先出现、操作区后出现，避免按钮抢先闪现
+- [x] README 替换默认模板，补充项目介绍、玩法、技术栈和路线图
+- [x] 引入隐藏 [STATE] 协议骨架，开始将地点/NPC/事件/邮箱状态从正文解析中拆出
+- [x] 新增邮箱状态机字段（discovered / pendingFirstOpen / unread / lastGeneratedAtTurn），兼容旧存档字段
+- [x] Barlow Phase 1 初步植入：林深第一封信异常细节、李无名暗示、王掌柜矛盾、不可靠性提示
 
 ## 已知问题 / 待优化
 
@@ -93,7 +97,6 @@
 - [ ] 信件重复触发：偶发，需要更严格的 unreadLetters 状态管理
 - [ ] AI 偶尔在叙述中写出信件内容（prompt 规则需强化）
 - [ ] 状态推进依赖关键词匹配（客栈/陶器/信等），章节、位置、NPC 记忆可能与真实叙事不一致
-- [ ] README 仍为 create-next-app 模板，对外缺少项目介绍、玩法说明、路线图和线上地址
 
 ### 待做功能
 - [ ] 视频生成（Agnes video API，作为"回忆"功能主动触发）
@@ -103,11 +106,9 @@
 - [ ] 分享卡片生成（截图/canvas → 可发朋友圈）
 - [ ] 付费层（解锁额外书信线/存档点/月卡）
 - [ ] 用户系统（登录/云存档）
-- [ ] 结构化叙事响应协议：叙事正文、选项、场景提示、剧情事件分离，减少正则和关键词判断
-- [ ] README + CHANGELOG 清理：修正模型名、移除过期 v0.1 行动限制描述、补项目介绍
-- [ ] 结构化 [STATE] 协议骨架：LOCATION / EVENTS / NPCS / MAILBOX 独立于正文解析
-- [ ] 邮箱状态机：discovered / pendingFirstOpen / unread queue / lastGeneratedAtTurn，替代 unreadLetters 简单数字
-- [ ] Barlow Phase 1 深化：第一封信异常细节、李无名线索、王掌柜矛盾、第三封信不可靠性
+- [ ] 完整结构化叙事响应协议：继续减少正文正则和关键词判断
+- [ ] 邮箱状态机后续清理：逐步移除 hasMailbox / unreadLetters 旧字段依赖
+- [ ] Barlow Phase 1 深化：把异常细节、李无名线索、王掌柜矛盾变成可追踪事件链
 
 ### Barlow 三阶段规划（2026-06-04 确认）
 

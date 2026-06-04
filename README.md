@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 来信长安
 
-## Getting Started
+AI 驱动的盛唐长安跨时空书信叙事游戏。
 
-First, run the development server:
+玩家以商人、乐师、游侠或书生的身份进入公元 742 年的长安，在市井、客栈、酒肆与陌生人之间游走。某个夜晚，一只像唐三彩陶器的信匣开始发光，来自 2077 年的林深把第一封信投向了这个时代。
+
+线上版本：https://letters-from-changan.vercel.app
+
+## 当前玩法
+
+- 选择身份进入不同开场。
+- 与 AI 叙事者对话，探索长安地点和 NPC。
+- 每轮对话生成行动选项与场景画面。
+- 通过信匣与 2077 年的林深通信。
+- 多旅程存档保存在当前浏览器，可在首页继续选择。
+
+## 技术栈
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- Agnes API
+  - `agnes-2.0-flash`：叙事与书信
+  - `agnes-image-2.0-flash`：场景图
+- Vercel 自动部署
+- `localStorage` 本地存档
+
+## 本地开发
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+需要在本地环境中配置：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+AGNES_API_KEY=...
+AGNES_API_URL=...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 验证
 
-## Learn More
+```bash
+npm run lint
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 路线图
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 结构化叙事状态协议：把地点、NPC、事件、邮箱状态从正文解析中拆出来。
+- 邮箱状态机：稳定处理首次发现、未读来信、后续回信与重复触发。
+- Barlow Phase 1：植入不可靠信息、跨时空矛盾与早期悬念钩子。
+- NPC 记忆与因果链：让玩家回信和对话选择影响长安世界。
+- 云存档与账号体系：支持跨设备继续旅程。

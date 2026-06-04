@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache } from '@/lib/gameState';
+import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate } from '@/lib/gameState';
 import { PlayerState, ROLES } from '@/lib/prompts';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
@@ -45,11 +45,13 @@ function cleanNarrative(text: string): string {
   return text
     // Remove closed [SCENE:...] / [MAILBOX] tags anywhere
     .replace(/\[SCENE:[^\]]*\]/gi, '')
+    .replace(/\[STATE\][\s\S]*?\[\/STATE\]/gi, '')
     .replace(/\[MAILBOX\]/gi, '')
     // Truncate from the FIRST option marker to the end (handles mid-stream)
     .replace(/(?:【\s*选项\s*[a-cA-C]?\s*】|(?:^|\n)\s*选项\s*[a-cA-C]\s*[：:]|(?:^|\n)\s*[a-cA-C]\s*[\.、:：)]|(?:^|\n)\s*[1-3]\s*[\.、:：)）])[\s\S]*$/i, '')
     // Truncate unclosed tags appearing at the end during streaming
     .replace(/\[SCENE:[\s\S]*$/i, '')
+    .replace(/\[STATE[\s\S]*$/i, '')
     .replace(/\[MAILBOX[\s\S]*$/i, '')
     .replace(/\[\s*$/, '')
     .replace(/\n{3,}/g, '\n\n')
@@ -131,6 +133,36 @@ function latestSceneFromMessages(messages: ChatMessage[]): string | null {
     if (messages[i].sceneImage) return messages[i].sceneImage || null;
   }
   return null;
+}
+
+function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
+  const match = text.match(/\[STATE\]([\s\S]*?)\[\/STATE\]/i);
+  if (!match) return undefined;
+  const update: NarrativeStateUpdate = {};
+  for (const rawLine of match[1].split('\n')) {
+    const line = rawLine.trim();
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex < 0) continue;
+    const key = line.slice(0, separatorIndex).trim().toUpperCase();
+    const value = line.slice(separatorIndex + 1).trim();
+    if (!value) continue;
+    if (key === 'LOCATION' && value.toLowerCase() !== 'none') {
+      update.location = value;
+    }
+    if (key === 'NPCS') {
+      update.npcs = value.split(/[、,，]/).map(item => item.trim()).filter(Boolean);
+    }
+    if (key === 'EVENTS') {
+      update.events = value.split(/[、,，]/).map(item => item.trim()).filter(Boolean);
+    }
+    if (key === 'MAILBOX') {
+      const mailbox = value.toLowerCase();
+      if (mailbox === 'none' || mailbox === 'pending_first_open' || mailbox === 'unread' || mailbox === 'quiet') {
+        update.mailbox = mailbox;
+      }
+    }
+  }
+  return update;
 }
 
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
@@ -347,12 +379,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 2. Mailbox trigger (from raw)
       const mailboxTriggered = rawContent.includes('[MAILBOX]');
-      const updated = updateChapter(gs, rawContent);
+      const narrativeState = parseNarrativeState(rawContent);
+      const updated = updateChapter(gs, rawContent, narrativeState);
 
       if ((mailboxTriggered || (rawContent.includes('陶器') && rawContent.includes('发光'))) && !gs.hasMailbox) {
         updated.hasMailbox = true;
         updated.chapter = 'mailbox_found';
-        updated.unreadLetters = 1;
+        updated.mailbox = {
+          ...updated.mailbox,
+          discovered: true,
+          pendingFirstOpen: true,
+          unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
+        };
+        updated.unreadLetters = updated.mailbox.unread.length;
         if (!updated.events.includes('发现邮箱')) {
           updated.events = [...updated.events, '发现邮箱'];
         }
@@ -369,9 +408,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 3. New letter after replying (every 5 interactions)
       if (updated.chapter === 'letter_replied' && updated.unreadLetters === 0) {
-        const msgsSinceLastLetter = messageCounterRef.current - (updated.letterHistory.length * 3);
-        if (msgsSinceLastLetter >= 5) {
-          updated.unreadLetters = 1;
+        const turnsSinceLastLetter = updated.turnCount - updated.mailbox.lastGeneratedAtTurn;
+        if (turnsSinceLastLetter >= 5) {
+          updated.mailbox = {
+            ...updated.mailbox,
+            discovered: true,
+            unread: [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
+            lastGeneratedAtTurn: updated.turnCount,
+          };
+          updated.unreadLetters = updated.mailbox.unread.length;
           setShowMailbox(true);
         }
       }
@@ -424,6 +469,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         ...gs,
         unreadLetters: 0,
         chapter: gs.chapter === 'mailbox_found' ? 'first_letter_read' : gs.chapter,
+        mailbox: {
+          ...gs.mailbox,
+          discovered: true,
+          pendingFirstOpen: false,
+          unread: [],
+        },
         letterHistory: [...currentHistory, { from: 'linShen', content, timestamp: Date.now() }],
       };
       onStateChange(updated);
@@ -442,6 +493,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const updated = {
       ...gs,
       chapter: 'letter_replied',
+      mailbox: {
+        ...gs.mailbox,
+        pendingFirstOpen: false,
+        unread: [],
+        lastGeneratedAtTurn: gs.turnCount || 0,
+      },
       letterHistory: [...gs.letterHistory, { from: 'player', content: reply, timestamp: Date.now() }],
     };
     onStateChange(updated);

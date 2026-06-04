@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import { buildSystemPrompt, PlayerState, ROLES } from '@/lib/prompts';
+import { buildSystemPrompt, PlayerState, ROLES, getMailboxState } from '@/lib/prompts';
 
 type ClientMessage = {
   role: string;
@@ -26,15 +26,18 @@ function normalizePlayerState(value: unknown): PlayerState | null {
   if (!value || typeof value !== 'object') return null;
   const state = value as Partial<PlayerState>;
   if (!state.role || !(state.role in ROLES)) return null;
+  const mailbox = getMailboxState(state);
   return {
     role: state.role,
     location: typeof state.location === 'string' ? state.location.slice(0, 80) : '长安城门外',
     chapter: typeof state.chapter === 'string' ? state.chapter.slice(0, 60) : 'arrival',
     knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs.filter((item): item is string => typeof item === 'string').slice(0, 20) : [],
     events: Array.isArray(state.events) ? state.events.filter((item): item is string => typeof item === 'string').slice(0, 40) : [],
-    hasMailbox: Boolean(state.hasMailbox),
-    unreadLetters: Number.isFinite(state.unreadLetters) ? Number(state.unreadLetters) : 0,
+    hasMailbox: mailbox.discovered,
+    unreadLetters: mailbox.unread.length,
+    mailbox,
     letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory.slice(-12) as PlayerState['letterHistory'] : [],
+    turnCount: Number.isFinite(state.turnCount) ? Number(state.turnCount) : 0,
     actionsToday: 0,
     lastPlayDate: typeof state.lastPlayDate === 'string' ? state.lastPlayDate : new Date().toISOString().split('T')[0],
   };

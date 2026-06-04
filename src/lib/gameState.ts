@@ -1,4 +1,4 @@
-import { PlayerState, INITIAL_STATE } from './prompts';
+import { PlayerState, INITIAL_STATE, getMailboxState } from './prompts';
 
 const STORAGE_KEY = 'letters-from-changan-state';
 const HISTORY_KEY = 'letters-from-changan-history';
@@ -25,6 +25,13 @@ export interface SaveSummary {
   letterCount: number;
   messageCount: number;
   updatedAt: number;
+}
+
+export interface NarrativeStateUpdate {
+  location?: string;
+  npcs?: string[];
+  events?: string[];
+  mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
 
 // Scene image cache: location key → image URL (persists across sessions)
@@ -75,6 +82,22 @@ function saveSaves(saves: GameSave[]): void {
   localStorage.setItem(SAVES_KEY, JSON.stringify(saves));
 }
 
+function normalizePlayerState(state: PlayerState): PlayerState {
+  const mailbox = getMailboxState(state);
+  return {
+    ...state,
+    knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs : [],
+    events: Array.isArray(state.events) ? state.events : [],
+    letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory : [],
+    hasMailbox: mailbox.discovered,
+    unreadLetters: mailbox.unread.length,
+    mailbox,
+    turnCount: state.turnCount || 0,
+    actionsToday: state.actionsToday || 0,
+    lastPlayDate: state.lastPlayDate || new Date().toISOString().split('T')[0],
+  };
+}
+
 function getActiveSaveId(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(ACTIVE_SAVE_KEY);
@@ -93,7 +116,7 @@ function migrateLegacySave(): void {
   if (!rawState) return;
 
   try {
-    const state = JSON.parse(rawState) as PlayerState;
+    const state = normalizePlayerState(JSON.parse(rawState) as PlayerState);
     const rawHistory = localStorage.getItem(HISTORY_KEY);
     const messages = rawHistory ? JSON.parse(rawHistory) as ChatMessage[] : [];
     const now = Date.now();
@@ -133,7 +156,7 @@ export function activateSave(id: string): PlayerState | null {
   const save = loadSaves().find((item) => item.id === id);
   if (!save) return null;
   setActiveSaveId(id);
-  return save.state;
+  return normalizePlayerState(save.state);
 }
 
 export function deleteSave(id: string): void {
@@ -153,13 +176,13 @@ export function loadGameState(): (PlayerState & { role: string }) | null {
   const save = saves.find((item) => item.id === activeId) || saves[0];
   if (save) {
     setActiveSaveId(save.id);
-    return save.state;
+    return normalizePlayerState(save.state);
   }
 
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    return normalizePlayerState(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -167,6 +190,7 @@ export function loadGameState(): (PlayerState & { role: string }) | null {
 
 export function saveGameState(state: PlayerState): void {
   if (typeof window === 'undefined') return;
+  const normalized = normalizePlayerState(state);
   migrateLegacySave();
   const saves = loadSaves();
   const activeId = getActiveSaveId();
@@ -174,17 +198,17 @@ export function saveGameState(state: PlayerState): void {
   if (index >= 0) {
     saves[index] = {
       ...saves[index],
-      role: state.role,
-      state,
+      role: normalized.role,
+      state: normalized,
       updatedAt: Date.now(),
     };
     saveSaves(saves);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
 }
 
 export function createNewGame(role: string): PlayerState {
-  const state: PlayerState = { ...INITIAL_STATE, role, letterHistory: [], knownNPCs: [], events: [] };
+  const state: PlayerState = normalizePlayerState({ ...INITIAL_STATE, role, letterHistory: [], knownNPCs: [], events: [] });
   const now = Date.now();
   const save: GameSave = {
     id: makeId(),
@@ -242,8 +266,8 @@ export function clearGame(): void {
   localStorage.removeItem(ACTIVE_SAVE_KEY);
 }
 
-export function updateChapter(state: PlayerState, content: string): PlayerState {
-  const updated = { ...state };
+export function updateChapter(state: PlayerState, content: string, narrativeState?: NarrativeStateUpdate): PlayerState {
+  const updated = normalizePlayerState({ ...state, turnCount: (state.turnCount || 0) + 1 });
   const addEvent = (event: string) => {
     if (!updated.events.includes(event)) {
       updated.events = [...updated.events, event];
@@ -254,6 +278,13 @@ export function updateChapter(state: PlayerState, content: string): PlayerState 
     if (content.includes('邮箱') || content.includes('陶器') || content.includes('发光')) {
       updated.chapter = 'mailbox_found';
       updated.hasMailbox = true;
+      updated.mailbox = {
+        ...updated.mailbox,
+        discovered: true,
+        pendingFirstOpen: true,
+        unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
+      };
+      updated.unreadLetters = updated.mailbox.unread.length + 1;
       addEvent('发现邮箱');
     } else {
       updated.location = '王掌柜客栈';
@@ -266,6 +297,11 @@ export function updateChapter(state: PlayerState, content: string): PlayerState 
   if (state.chapter === 'mailbox_found' && content.includes('信')) {
     updated.chapter = 'first_letter_read';
     updated.unreadLetters = 0;
+    updated.mailbox = {
+      ...updated.mailbox,
+      pendingFirstOpen: false,
+      unread: [],
+    };
   }
 
   if (content.includes('阿依')) {
@@ -292,6 +328,43 @@ export function updateChapter(state: PlayerState, content: string): PlayerState 
   if (locationHint) {
     updated.location = locationHint.location;
   }
+
+  if (narrativeState?.location && narrativeState.location !== 'none') {
+    updated.location = narrativeState.location.slice(0, 80);
+  }
+  for (const npc of narrativeState?.npcs || []) {
+    if (npc && npc !== 'none' && !updated.knownNPCs.includes(npc)) {
+      updated.knownNPCs = [...updated.knownNPCs, npc.slice(0, 40)];
+    }
+  }
+  for (const event of narrativeState?.events || []) {
+    if (event && event !== 'none') addEvent(event.slice(0, 60));
+  }
+  if (narrativeState?.mailbox === 'pending_first_open') {
+    updated.chapter = 'mailbox_found';
+    updated.mailbox = {
+      ...updated.mailbox,
+      discovered: true,
+      pendingFirstOpen: true,
+      unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
+    };
+  } else if (narrativeState?.mailbox === 'unread') {
+    updated.mailbox = {
+      ...updated.mailbox,
+      discovered: true,
+      unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
+      lastGeneratedAtTurn: updated.turnCount,
+    };
+  } else if (narrativeState?.mailbox === 'quiet') {
+    updated.mailbox = {
+      ...updated.mailbox,
+      discovered: true,
+      pendingFirstOpen: false,
+      unread: [],
+    };
+  }
+  updated.hasMailbox = updated.mailbox.discovered;
+  updated.unreadLetters = updated.mailbox.unread.length;
 
   return updated;
 }
