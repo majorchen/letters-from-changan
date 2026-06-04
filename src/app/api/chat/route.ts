@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const stream = await getClient().chat.completions.create({
-      model: 'gpt-4o',
+      model: 'agnes-2.0-flash',
       messages: allMessages,
       stream: true,
       temperature: 0.85,

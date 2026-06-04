@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const response = await getClient().chat.completions.create({
-      model: 'gpt-4o',
+      model: 'agnes-2.0-flash',
       messages,
       temperature: 0.9,
       max_tokens: 400,

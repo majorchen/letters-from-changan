@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const response = await getClient().images.generate({
-      model: 'dall-e-3',
+      model: 'agnes-image-2.1-flash',
       prompt,
       n: 1,
       size: '1792x1024',
