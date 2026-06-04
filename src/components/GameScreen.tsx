@@ -168,15 +168,23 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
+      // Force mailbox discovery on 3rd interaction if still in arrival
+      if (messageCounter >= 3 && gameState.chapter === 'arrival' && !gameState.hasMailbox) {
+        fullContent += '\n\n你走进房间，把行李放下。正要歇脚时，目光扫过角落——那里有一个奇怪的陶器，像是唐三彩的釉色，琥珀、乳白、翠绿交错。它不像花瓶，更像是……一个邮箱？你凑近看，陶器的开口处似乎有微弱的金色光芒在流动。';
+        // Update the displayed message
+        assistantMsg.content = fullContent;
+        setMessages([...newMessages, { ...assistantMsg }]);
+      }
+
       const updated = updateChapter(gameState, fullContent);
 
-      // Fix #4: Only generate image on key story moments (every 5th message or scene change)
+      // Generate image on key story moments
       if (messageCounter === 1 || messageCounter % 5 === 0 || updated.chapter !== gameState.chapter) {
         const sceneDesc = fullContent.slice(0, 150).replace(/【.*?】/g, '');
         generateSceneImage(`Tang Dynasty Chang'an, ${sceneDesc}`);
       }
 
-      // Fix #5: Mailbox triggers based on message count, not random
+      // Mailbox state update
       if (!gameState.hasMailbox && updated.hasMailbox) {
         updated.unreadLetters = 1;
         setShowMailbox(true);
