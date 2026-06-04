@@ -5,6 +5,7 @@ import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateCha
 import { PlayerState, buildSystemPrompt, ROLES } from '@/lib/prompts';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
+import Prologue from './Prologue';
 
 interface Props {
   gameState: PlayerState;
@@ -24,7 +25,9 @@ const SCENE_TRIGGERS = ['第一次进入', '客栈', '邮箱发光', '西市', '
 let messageCounter = 0;
 
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
+  const [gamePhase, setGamePhase] = useState<'prologue' | 'typewriter' | 'playing'>('prologue');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [typewriterText, setTypewriterText] = useState('');
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [showLetter, setShowLetter] = useState(false);
@@ -52,26 +55,50 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }, []);
 
-  // Fix #1: Fixed opening narration instead of API call
+  // Check if this is a new game or a save
   useEffect(() => {
     if (initRef.current) return;
     const history = loadChatHistory();
-    if (history.length === 0) {
+    if (history.length > 0) {
       initRef.current = true;
-      const opening = OPENING_NARRATIONS[gameState.role] || OPENING_NARRATIONS.scholar;
-      const openingMsg: ChatMessage = {
-        role: 'assistant',
-        content: opening + '\n\n眼前是宽阔的朱雀大街，人群熙攘。你需要先找个落脚的地方。\n\n【选项A】沿着大街往北走，找一家客栈安顿\n【选项B】先去西市转转，打听行情\n【选项C】在城门附近随便看看',
-        timestamp: Date.now(),
-      };
-      setMessages([openingMsg]);
-      saveChatHistory([openingMsg]);
-      // Generate opening scene image
-      generateSceneImage('The grand Zhuque Gate of Tang Dynasty Chang\'an, bustling crowd entering the massive city gate, merchants with camels, guards in armor, warm golden sunlight');
+      setGamePhase('playing');
     } else {
       initRef.current = true;
+      // New game: show prologue first
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Typewriter effect for opening narration
+  useEffect(() => {
+    if (gamePhase !== 'typewriter') return;
+    const opening = OPENING_NARRATIONS[gameState.role] || OPENING_NARRATIONS.scholar;
+    const fullText = opening + '\n\n眼前是宽阔的朱雀大街，人群熙攘。你需要先找个落脚的地方。\n\n【选项A】沿着大街往北走，找一家客栈安顿\n【选项B】先去西市转转，打听行情\n【选项C】在城门附近随便看看';
+    let i = 0;
+    setTypewriterText('');
+    const interval = setInterval(() => {
+      i++;
+      setTypewriterText(fullText.slice(0, i));
+      if (i >= fullText.length) {
+        clearInterval(interval);
+        // Save as first message and transition to playing
+        const openingMsg: ChatMessage = {
+          role: 'assistant',
+          content: fullText,
+          timestamp: Date.now(),
+        };
+        setMessages([openingMsg]);
+        saveChatHistory([openingMsg]);
+        setTimeout(() => setGamePhase('playing'), 300);
+      }
+    }, 35);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gamePhase]);
+
+  const handlePrologueComplete = useCallback((bgUrl: string | null) => {
+    if (bgUrl) setSceneImage(bgUrl);
+    setGamePhase('typewriter');
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
@@ -267,6 +294,35 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   const roleInfo = ROLES[gameState.role];
+
+  // Prologue phase
+  if (gamePhase === 'prologue') {
+    return <Prologue role={gameState.role} onComplete={handlePrologueComplete} />;
+  }
+
+  // Typewriter phase — cinematic opening
+  if (gamePhase === 'typewriter') {
+    return (
+      <div className="h-full relative overflow-hidden bg-stone-950">
+        {/* Background image if loaded */}
+        {sceneImage && (
+          <div className="absolute inset-0">
+            <img src={sceneImage} alt="" className="w-full h-full object-cover opacity-30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-stone-950/40" />
+          </div>
+        )}
+        {/* Typewriter text */}
+        <div className="absolute inset-0 flex items-end pb-24 px-6">
+          <div className="max-w-lg mx-auto w-full">
+            <div className="text-amber-100/80 text-sm leading-relaxed whitespace-pre-wrap">
+              {typewriterText}
+              <span className="inline-block w-0.5 h-4 bg-amber-400/60 ml-0.5 animate-pulse align-text-bottom" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col relative">
