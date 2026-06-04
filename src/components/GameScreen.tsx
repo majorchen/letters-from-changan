@@ -212,20 +212,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
-      // Scene image: detect [SCENE:...] tag from AI, or fallback to keyword matching
-      const sceneMatch = fullContent.match(/\[SCENE:(.+?)\]/);
+      // Scene image: detect [SCENE:...] tag from AI (multiline-safe)
+      const sceneMatch = fullContent.match(/\[SCENE:([^\]]+)\]/s);
       if (sceneMatch) {
         const sceneDesc = sceneMatch[1].trim();
         if (sceneDesc !== lastSceneLocation) {
           lastSceneLocation = sceneDesc;
           generateSceneImage(sceneDesc + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.');
         }
-        // Remove the tag from displayed content
-        fullContent = fullContent.replace(/\n?\[SCENE:.+?\]/, '');
-        assistantMsg.content = fullContent;
-        setMessages([...newMessages, { ...assistantMsg }]);
       } else {
-        // Fallback: keyword matching for common locations
         for (const loc of LOCATION_KEYWORDS) {
           if (fullContent.includes(loc.keyword) && lastSceneLocation !== loc.keyword) {
             lastSceneLocation = loc.keyword;
@@ -234,6 +229,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           }
         }
       }
+
+      // Clean ALL tags from displayed content (final pass)
+      fullContent = fullContent.replace(/\n?\[SCENE:[^\]]*\]/gs, '').replace(/\n?\[MAILBOX\]/g, '').trim();
+      assistantMsg.content = fullContent;
+      setMessages([...newMessages, { ...assistantMsg }]);
 
       onStateChange(updated);
       saveGameState(updated);
@@ -432,7 +432,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               {msg.role === 'system' ? (
                 <span className="text-amber-500/30 text-xs">{msg.content}</span>
               ) : msg.role === 'user' ? (
-                <span className="text-amber-300/90 text-sm">{msg.content}</span>
+                <span className="text-amber-500/50 text-sm">{msg.content}</span>
               ) : (
                 <p className="text-amber-100/70 text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
               )}
