@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter } from '@/lib/gameState';
 import { PlayerState, buildSystemPrompt, ROLES } from '@/lib/prompts';
 import LetterModal from './LetterModal';
+import LetterBox from './LetterBox';
 
 interface Props {
   gameState: PlayerState;
@@ -30,6 +31,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [letterContent, setLetterContent] = useState('');
   const [letterLoading, setLetterLoading] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
+  const [showLetterBox, setShowLetterBox] = useState(false);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -277,7 +279,18 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-300/80 text-sm font-medium">{gameState.location}</div>
           <div className="text-amber-600/40 text-xs">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
-        <div className="text-amber-600/40 text-xs">{gameState.actionsToday}/10</div>
+        <div className="flex items-center gap-3">
+          {gameState.letterHistory.length > 0 && (
+            <button
+              onClick={() => setShowLetterBox(true)}
+              className="text-amber-500/50 hover:text-amber-400 text-base"
+              title="信匣"
+            >
+              📜
+            </button>
+          )}
+          <span className="text-amber-600/40 text-xs">{gameState.actionsToday}/10</span>
+        </div>
       </div>
 
       {/* Fix #2: Chat area with scene image as background */}
@@ -394,6 +407,14 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           onClose={() => setShowLetter(false)}
           onReply={handleReply}
           canReply={true}
+        />
+      )}
+
+      {/* Letter box */}
+      {showLetterBox && (
+        <LetterBox
+          letters={gameState.letterHistory}
+          onClose={() => setShowLetterBox(false)}
         />
       )}
     </div>
