@@ -27,10 +27,10 @@ const ROLE_SCENES: Record<string, string> = {
   scholar: '/scene-scholar.webp',
 };
 
-const MAILBOX_INJECTION = '\n\n你走进房间，把行李放下。正要歇脚时，目光扫过角落——那里有一个奇怪的陶器，像是唐三彩的釉色，琥珀、乳白、翠绿交错。它不像花瓶，更像是……一个邮箱？你凑近看，陶器的开口处似乎有微弱的金色光芒在流动。';
+// Mailbox injection removed — now handled by AI [MAILBOX] tag
 
 let messageCounter = 0;
-let mailboxInjected = false;
+// mailboxInjected not needed — AI handles via [MAILBOX] tag
 let lastSceneLocation = '';
 
 const LOCATION_KEYWORDS = [
@@ -176,26 +176,38 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }
       }
 
-      // Force mailbox on 3rd message (only once)
-      if (messageCounter >= 3 && !mailboxInjected && gameState.chapter === 'arrival' && !gameState.hasMailbox) {
-        mailboxInjected = true;
-        fullContent += MAILBOX_INJECTION;
+      // Detect [MAILBOX] tag from AI — triggers mailbox discovery
+      if (fullContent.includes('[MAILBOX]') && !gameState.hasMailbox) {
+        fullContent = fullContent.replace(/\n?\[MAILBOX\]/, '');
         assistantMsg.content = fullContent;
         setMessages([...newMessages, { ...assistantMsg }]);
       }
 
       const updated = updateChapter(gameState, fullContent);
 
-      // When mailbox is found, immediately show the button
+      // When mailbox is found (via keyword detection in updateChapter), show button
       if (updated.hasMailbox && !gameState.hasMailbox) {
         updated.unreadLetters = 1;
         setShowMailbox(true);
       }
+      // Also handle [MAILBOX] tag directly
+      if (fullContent.includes('陶器') || fullContent.includes('邮箱')) {
+        if (!updated.hasMailbox) {
+          updated.hasMailbox = true;
+          updated.chapter = 'mailbox_found';
+          updated.unreadLetters = 1;
+          updated.events = [...updated.events, '发现邮箱'];
+          setShowMailbox(true);
+        }
+      }
 
-      // After replying to letter, trigger new letter every 5 msgs
-      if (updated.chapter === 'letter_replied' && messageCounter % 5 === 0) {
-        updated.unreadLetters = 1;
-        setShowMailbox(true);
+      // After replying to letter, new letter arrives after 5 more interactions
+      if (updated.chapter === 'letter_replied' && updated.unreadLetters === 0) {
+        const msgsSinceLastLetter = messageCounter - (updated.letterHistory.length * 3);
+        if (msgsSinceLastLetter >= 5) {
+          updated.unreadLetters = 1;
+          setShowMailbox(true);
+        }
       }
 
       // Scene image: detect [SCENE:...] tag from AI, or fallback to keyword matching
