@@ -46,9 +46,10 @@ const checks = [
   },
   {
     name: 'cloud saves are optional and Supabase-backed',
-    pass: files.start.includes('云同步')
-      && files.start.includes('canUseCloudSaves')
-      && files.start.includes('sendCloudLoginLink'),
+    pass: files.start.includes('canUseCloudSaves')
+      && files.start.includes('syncCloudSaves')
+      && files.start.includes('sendCloudLoginOtp')
+      && files.start.includes('verifyCloudLoginOtp'),
   },
   {
     name: 'playtest report button is not in game header',

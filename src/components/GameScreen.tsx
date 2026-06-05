@@ -48,6 +48,25 @@ const VIDEO_EVENT_COOLDOWN_TURNS = 10;
 const VIDEO_EVENT_COOLDOWN_MS = 90_000;
 const GUEST_FIRST_LETTER_TOAST_KEY = 'letters-from-changan-guest-first-letter-toast-v1';
 
+const EVENT_LABELS: Record<string, string> = {
+  anchor_inn_basement_future: '客栈暗处的未来痕迹',
+  anchor_letter_without_postroad: '没有驿路的来信',
+  anchor_missing_ward_map: '坊图缺页',
+  anchor_persian_song_future_echo: '胡乐里的未来回声',
+  anchor_ledger_price_drift: '账本价格异动',
+  anchor_guard_knows_name: '守门兵认得你的名字',
+  anchor_ceramic_warm_after_letter: '陶器余温',
+  anchor_linshen_wrong_tree: '林深说错的树',
+  anchor_future_food_smell: '汤里的未来气味',
+  anchor_ai_scribe_copy: '抄书童的重字',
+  anchor_blade_notch_memory: '刀上的陌生缺口',
+  anchor_market_fire_not_yet: '尚未发生的西市火',
+  anchor_border_report_whisper: '军报里的耳语',
+  anchor_leaving_changan_cart: '清晨离京的车',
+  anchor_linshen_knows_end: '林深知道的结局',
+  anchor_second_correspondent_shadow: '另一个收信人',
+};
+
 // Strip all tags and option lines from displayed narrative text.
 // Handles unclosed [SCENE: during streaming, and removes 【选项X】 lines.
 function cleanNarrative(text: string): string {
@@ -123,7 +142,11 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
 function getContradictionOption(state: PlayerState): string | null {
   for (const [event, sources] of Object.entries(state.eventVersions || {})) {
     if (Object.keys(sources || {}).length >= 2) {
-      return `追问「${event}」的不同说法`;
+      const label = EVENT_LABELS[event] || event
+        .replace(/^anchor_/, '')
+        .replace(/_/g, ' ')
+        .trim();
+      return `追问「${label}」的不同说法`;
     }
   }
   return null;
@@ -131,7 +154,11 @@ function getContradictionOption(state: PlayerState): string | null {
 
 function withContradictionOption(options: string[], contradictionOption: string | null): string[] {
   if (!contradictionOption || options.includes(contradictionOption)) return options;
-  return [contradictionOption, ...options].slice(0, 4);
+  return [...options, contradictionOption].slice(0, 4);
+}
+
+function normalizeOptionLabel(option: string): string {
+  return option.replace(/「(anchor_[a-z0-9_]+)」/gi, (_, key: string) => `「${EVENT_LABELS[key] || key.replace(/^anchor_/, '').replace(/_/g, ' ')}」`);
 }
 
 function ensureMailboxOption(options: string[], state: PlayerState): string[] {
@@ -428,13 +455,17 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             if (data === '[DONE]') continue;
             try {
               const parsed = JSON.parse(data);
+              if (parsed.error) throw new Error(String(parsed.error));
               if (parsed.content) {
                 fullContent += parsed.content;
                 // Real-time cleanup during streaming (strips tags + option lines)
                 assistantMsg.content = cleanNarrative(fullContent);
                 setMessages([...newMessages, { ...assistantMsg }]);
               }
-            } catch { /* skip */ }
+            } catch (err) {
+              if (data.includes('"error"')) throw err;
+              /* skip malformed chunks */
+            }
           }
         }
       }
@@ -443,12 +474,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         if (data !== '[DONE]') {
           try {
             const parsed = JSON.parse(data);
+            if (parsed.error) throw new Error(String(parsed.error));
             if (parsed.content) {
               fullContent += parsed.content;
               assistantMsg.content = cleanNarrative(fullContent);
               setMessages([...newMessages, { ...assistantMsg }]);
             }
-          } catch { /* incomplete tail, skip */ }
+          } catch (err) {
+            if (data.includes('"error"')) throw err;
+            /* incomplete tail, skip */
+          }
         }
       }
 
@@ -899,7 +934,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         saveVideoAsset({ ...asset, status: 'failed', updatedAt: Date.now() });
         return null;
       } else if (attempt < 6) {
-        window.setTimeout(() => pollVideoAsset(asset, attempt + 1), 6000);
+        await new Promise((resolve) => window.setTimeout(resolve, 6000));
+        return pollVideoAsset(asset, attempt + 1);
       }
     } catch {
       // Keep CSS visual cue fallback.
@@ -1210,7 +1246,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       {/* AI options as clickable buttons — from last assistant message */}
       {(() => {
         const lastMsg = messages[messages.length - 1];
-        const currentOptions = (!isStreaming && lastMsg?.role === 'assistant' && lastMsg.options) ? lastMsg.options : [];
+        const currentOptions = (!isStreaming && lastMsg?.role === 'assistant' && lastMsg.options) ? lastMsg.options.map(normalizeOptionLabel) : [];
         if (showMailbox || currentOptions.length === 0) return null;
         return (
           <div className="px-5 pb-2 flex flex-col gap-2 flex-none z-10">

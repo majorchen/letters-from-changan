@@ -40,6 +40,7 @@ VISUAL: none / glitch / memory / ending
 INPUT: options / free
 MAILBOX: none / pending_first_open / unread / quiet
 [/STATE]
+EVENT_VERSION 的事件名必须是玩家可读的中文短名，例如“账本价格异动”，不要写 anchor_ledger_price_drift 这类内部代码。
 不要输出 Markdown 标题，不要把选项混进正文。除 [SCENE] 和 [STATE] 外，不要输出其他系统标记。
 
 ## 场景标记规则（重要）

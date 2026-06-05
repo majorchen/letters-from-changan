@@ -232,15 +232,26 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       return Response.json({ error: data }, { status: response.status });
     }
+    const sourceUrl = extractVideoUrl(data);
+    const persisted = sourceUrl
+      ? await persistVideoAsset({
+        key: assetKey,
+        type: eventType,
+        prompt: cleanedPrompt,
+        taskId: extractTaskId(data),
+        sourceUrl,
+        segmentIndex,
+      })
+      : { publicUrl: sourceUrl, persisted: false };
     return Response.json({
       taskId: extractTaskId(data),
       status: data.status || data.data?.status || 'queued',
       progress: data.progress ?? data.data?.progress ?? 0,
-      url: extractVideoUrl(data),
+      url: persisted.publicUrl,
       key: assetKey,
       type: eventType,
       segmentIndex,
-      persisted: false,
+      persisted: persisted.persisted,
       raw: data,
     });
   } catch (err) {
