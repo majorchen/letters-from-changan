@@ -1,4 +1,4 @@
-const baseUrl = process.env.SMOKE_BASE_URL || 'https://letters-from-changan.vercel.app';
+const baseUrl = process.env.SMOKE_BASE_URL || 'https://letterstang.aifisher.cn';
 const roles = (process.env.PLAYTEST_ROLES || 'scholar').split(',').map((role) => role.trim()).filter(Boolean);
 const turns = Number(process.env.PLAYTEST_TURNS || 12);
 

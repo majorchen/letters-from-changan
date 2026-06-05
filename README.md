@@ -4,7 +4,7 @@ AI 驱动的盛唐长安跨时空书信叙事游戏。
 
 玩家以商人、乐师、游侠或书生的身份进入公元 742 年的长安，在市井、客栈、酒肆与陌生人之间游走。某个夜晚，一只像唐三彩陶器的信匣开始发光，来自 2077 年的林深把第一封信投向了这个时代。
 
-线上版本：https://letters-from-changan.vercel.app
+线上版本：https://letterstang.aifisher.cn
 
 ## 当前玩法
 
@@ -39,8 +39,10 @@ npm run dev
 ```bash
 AGNES_API_KEY=...
 AGNES_API_URL=...
+AGNES_VIDEO_MODEL=agnes-video-v2.0
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 Supabase 未配置时，游戏会自动回退为纯本地存档。
@@ -71,3 +73,4 @@ npm run smoke:letter
 - [docs/PLAYTEST_ACCEPTANCE.md](docs/PLAYTEST_ACCEPTANCE.md)：长线试玩、啊哈时刻和人工反馈的验收标准。
 - [docs/CLOUD_SAVE_PLAN.md](docs/CLOUD_SAVE_PLAN.md)：账号与云存档接入方案。
 - [docs/VIDEO_PIPELINE_PLAN.md](docs/VIDEO_PIPELINE_PLAN.md)：Agnes video、缓存与结局视频管线。
+- [docs/WEEKEND_LAUNCH_CHECKLIST.md](docs/WEEKEND_LAUNCH_CHECKLIST.md)：Supabase、Vercel 和周末试玩上线清单。

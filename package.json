@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "supabase:status": "supabase status",
+    "supabase:push": "supabase db push",
     "smoke:chat": "node scripts/smoke-chat.mjs",
     "smoke:letter": "node scripts/smoke-letter.mjs",
     "playtest:longrun": "node scripts/playtest-longrun.mjs",
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "supabase": "^2.105.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -1,4 +1,4 @@
-const baseUrl = process.env.SMOKE_BASE_URL || 'https://letters-from-changan.vercel.app';
+const baseUrl = process.env.SMOKE_BASE_URL || 'https://letterstang.aifisher.cn';
 
 function makeState(role = 'scholar') {
   return {

@@ -44,6 +44,8 @@ const LOCATION_KEYWORDS = [
 
 const GAME_URL = 'https://letterstang.aifisher.cn';
 const REPLY_LETTER_COOLDOWN_TURNS = 28;
+const VIDEO_EVENT_COOLDOWN_TURNS = 10;
+const VIDEO_EVENT_COOLDOWN_MS = 90_000;
 const GUEST_FIRST_LETTER_TOAST_KEY = 'letters-from-changan-guest-first-letter-toast-v1';
 
 // Strip all tags and option lines from displayed narrative text.
@@ -285,7 +287,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [showLetterBox, setShowLetterBox] = useState(false);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
-  const [shareStatus, setShareStatus] = useState('');
   const [shareImageUrl, setShareImageUrl] = useState('');
   const [visualCue, setVisualCue] = useState<'glitch' | 'memory' | null>(null);
   const [videoCue, setVideoCue] = useState<{ type: VideoEventType; urls: string[]; index: number } | null>(null);
@@ -294,7 +295,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
-  const lastSceneLocationRef = useRef('');
+  const lastVideoEventRef = useRef<{ type?: VideoEventType; turn: number; at: number }>({ turn: -999, at: 0 });
+  const endingVideoStartedRef = useRef(false);
 
   // Always-fresh refs to avoid React closure staleness in async callbacks
   const gameStateRef = useRef(gameState);
@@ -335,7 +337,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       // New game — reset module-level state
       initRef.current = true;
       messageCounterRef.current = 0;
-      lastSceneLocationRef.current = '';
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -456,11 +457,14 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const cleanContent = cleanNarrative(rawContent);
       const narrativeState = parseNarrativeState(rawContent);
       if (narrativeState?.visualCue === 'glitch' || narrativeState?.visualCue === 'memory' || narrativeState?.visualCue === 'ending') {
-        if (narrativeState.visualCue !== 'ending') {
-          setVisualCue(narrativeState.visualCue);
-          window.setTimeout(() => setVisualCue(null), narrativeState.visualCue === 'memory' ? 2600 : 1400);
+        const acceptedVideoCue = acceptVideoCue(narrativeState.visualCue, gameStateRef.current);
+        if (acceptedVideoCue) {
+          if (narrativeState.visualCue !== 'ending') {
+            setVisualCue(narrativeState.visualCue);
+            window.setTimeout(() => setVisualCue(null), narrativeState.visualCue === 'memory' ? 2600 : 1400);
+          }
+          prepareVideoCue(narrativeState.visualCue, updatedVideoPrompt(gameStateRef.current, cleanContent));
         }
-        prepareVideoCue(narrativeState.visualCue, updatedVideoPrompt(gameStateRef.current, cleanContent));
       }
 
       // 1. Scene image — prefer the AI's current-shot [SCENE:] tag every turn.
@@ -468,34 +472,27 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const sceneMatch = rawContent.match(/\[SCENE:([^\]]+)\]/i);
       if (sceneMatch) {
         const sceneDesc = sceneMatch[1].trim();
-        const key = 'ai:' + sceneDesc.slice(0, 80);
-        lastSceneLocationRef.current = key;
         generateSceneImage(
           sceneDesc + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
-          key,
+          `ai:${sceneDesc.slice(0, 120)}`,
         );
       } else {
         let usedKeywordFallback = false;
         for (const loc of LOCATION_KEYWORDS) {
           if (rawContent.includes(loc.keyword)) {
             usedKeywordFallback = true;
-            if (lastSceneLocationRef.current !== loc.keyword) {
-              lastSceneLocationRef.current = loc.keyword;
-              generateSceneImage(
-                loc.scene + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
-                loc.keyword,
-              );
-            }
+            generateSceneImage(
+              loc.scene + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
+              `location:${loc.keyword}`,
+            );
             break;
           }
         }
         if (!usedKeywordFallback) {
           const fallbackScene = fallbackSceneFromNarrative(gs, cleanContent);
-          const key = 'narrative:' + cleanContent.slice(0, 80);
-          lastSceneLocationRef.current = key;
           generateSceneImage(
             fallbackScene + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
-            key,
+            `narrative:${gs.role}:${gs.location}:${cleanContent.replace(/\s+/g, ' ').slice(0, 120)}`,
           );
         }
       }
@@ -702,7 +699,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Background: bg-changan.webp with object-cover (no stretching) + dark overlay matching StartScreen
+    // Background: use the title screen Chang'an image, then darken it for legibility.
     await new Promise<void>((resolve) => {
       const bgImg = new window.Image();
       bgImg.crossOrigin = 'anonymous';
@@ -719,19 +716,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           sy = (bgImg.height - sh) / 2;
         }
         ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-        // Overlay gradient matching StartScreen: from-stone-950 via-stone-950/70 to-stone-950/20 (bottom to top)
-        const ov = ctx.createLinearGradient(0, canvas.height, 0, 0);
-        ov.addColorStop(0, 'rgba(12,10,9,0.95)');
-        ov.addColorStop(0.4, 'rgba(12,10,9,0.75)');
-        ov.addColorStop(1, 'rgba(12,10,9,0.30)');
+        const ov = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        ov.addColorStop(0, 'rgba(12,10,9,0.84)');
+        ov.addColorStop(0.46, 'rgba(12,10,9,0.90)');
+        ov.addColorStop(1, 'rgba(12,10,9,0.96)');
         ctx.fillStyle = ov;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Additional top darken
-        const topOv = ctx.createLinearGradient(0, 0, 0, 300);
-        topOv.addColorStop(0, 'rgba(12,10,9,0.50)');
-        topOv.addColorStop(1, 'transparent');
-        ctx.fillStyle = topOv;
-        ctx.fillRect(0, 0, canvas.width, 300);
         resolve();
       };
       bgImg.onerror = () => {
@@ -744,78 +734,91 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       bgImg.src = '/bg-changan.webp';
     });
 
-    let curY = 80;
+    let curY = 104;
 
-    // App icon (rounded square) — use apple-touch-icon which is more reliable
     await new Promise<void>((resolve) => {
       const icon = new window.Image();
       icon.crossOrigin = 'anonymous';
       icon.onload = () => {
-        const s = 56, ix = 96, iy = curY, r = 12;
+        const s = 104;
+        const ix = (canvas.width - s) / 2;
+        const iy = curY;
+        const r = 22;
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(ix, iy, s, s, r);
         ctx.clip();
         ctx.drawImage(icon, ix, iy, s, s);
         ctx.restore();
-        ctx.strokeStyle = 'rgba(217,119,6,0.30)';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(253,230,138,0.24)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.roundRect(ix, iy, s, s, r);
         ctx.stroke();
         resolve();
       };
       icon.onerror = () => resolve();
-      icon.src = '/apple-touch-icon.png';
+      icon.src = '/icon-192.png';
     });
 
-    // Title — match StartScreen: text-amber-200 = #fde68a
+    curY += 138;
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#fde68a';
-    ctx.font = '700 52px serif';
-    ctx.fillText('来信长安', 168, curY + 40);
-    // Subtitle — match StartScreen: text-amber-400/70
-    ctx.fillStyle = 'rgba(251,191,36,0.70)';
-    ctx.font = 'italic 22px serif';
-    ctx.fillText("Letters from Chang'an", 168, curY + 72);
-    curY += 130;
+    ctx.font = '700 72px serif';
+    ctx.fillText('来信长安', canvas.width / 2, curY);
+    ctx.fillStyle = 'rgba(251,191,36,0.58)';
+    ctx.font = 'italic 30px serif';
+    ctx.fillText("Letters from Chang'an", canvas.width / 2, curY + 48);
+    curY += 152;
 
-    // Hook line — text-amber-400/40 style but slightly brighter for emphasis
-    ctx.fillStyle = 'rgba(251,191,36,0.55)';
-    ctx.font = '700 34px serif';
-    ctx.fillText('你在唐朝收到了', 96, curY);
-    ctx.fillText('一封来自2077年的信', 96, curY + 48);
-    curY += 120;
+    ctx.fillStyle = 'rgba(253,230,138,0.88)';
+    ctx.font = '700 42px serif';
+    ctx.fillText('你在唐朝收到了', canvas.width / 2, curY);
+    ctx.fillText('一封来自2077年的信', canvas.width / 2, curY + 58);
+    curY += 128;
 
-    // Role / location — match StartScreen: text-amber-500/60
     ctx.fillStyle = 'rgba(245,158,11,0.60)';
-    ctx.font = '24px serif';
-    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, 96, curY);
-    curY += 55;
+    ctx.font = '26px serif';
+    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, canvas.width / 2, curY);
+    curY += 54;
 
-    // Narrative excerpt — match GameScreen text: text-amber-100 ≈ #fef3c7 at 0.78
+    ctx.textAlign = 'left';
+    const excerptX = 92;
+    const excerptY = curY;
+    const excerptW = 896;
+    const excerptH = 440;
+    ctx.fillStyle = 'rgba(28,25,23,0.58)';
+    ctx.strokeStyle = 'rgba(245,158,11,0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(excerptX, excerptY, excerptW, excerptH, 24);
+    ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = 'rgba(254,243,199,0.78)';
     ctx.font = '34px serif';
-    wrapCanvasText(ctx, shareExcerpt.slice(0, 320), 96, curY, 888, 54, 10);
+    wrapCanvasText(ctx, shareExcerpt.slice(0, 420), excerptX + 42, excerptY + 68, excerptW - 84, 56, 7);
 
-    // QR code
     const qrCanvas = document.createElement('canvas');
     await QRCode.toCanvas(qrCanvas, GAME_URL, {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 190,
-      color: { dark: '#0c0a09', light: '#fde68a' },
+      color: { dark: '#1c1917', light: '#fef3c7' },
     });
-    ctx.fillStyle = 'rgba(253,230,138,0.90)';
-    ctx.fillRect(96, 1170, 218, 218);
-    ctx.drawImage(qrCanvas, 110, 1184, 190, 190);
+    const qrX = 96;
+    const qrY = 1184;
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.roundRect(qrX, qrY, 218, 218, 18);
+    ctx.fill();
+    ctx.drawImage(qrCanvas, qrX + 14, qrY + 14, 190, 190);
 
-    // QR text — match amber-400/70 and amber-500/60
-    ctx.fillStyle = 'rgba(251,191,36,0.60)';
-    ctx.font = '24px serif';
-    ctx.fillText(GAME_URL.replace('https://', ''), 340, 1250);
-    ctx.fillStyle = 'rgba(245,158,11,0.50)';
-    ctx.font = '22px serif';
-    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 340, 1290);
+    ctx.fillStyle = 'rgba(253,230,138,0.78)';
+    ctx.font = '700 28px serif';
+    ctx.fillText(GAME_URL.replace('https://', ''), 350, 1264);
+    ctx.fillStyle = 'rgba(254,243,199,0.58)';
+    ctx.font = '25px serif';
+    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 350, 1310);
 
     const dataUrl = canvas.toDataURL('image/png');
     setShareImageUrl(dataUrl);
@@ -835,6 +838,22 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       'closing shot, quiet fade toward black, unresolved tenderness, no text, no subtitles',
     ];
     return `${basePrompt}, ending sequence segment ${segmentIndex + 1}, ${beats[segmentIndex] || beats[0]}`;
+  }
+
+  function acceptVideoCue(type: VideoEventType, state: PlayerState): boolean {
+    if (type === 'ending') {
+      if (endingVideoStartedRef.current) return false;
+      endingVideoStartedRef.current = true;
+      return true;
+    }
+
+    const now = Date.now();
+    const last = lastVideoEventRef.current;
+    if (state.turnCount - last.turn < VIDEO_EVENT_COOLDOWN_TURNS) return false;
+    if (now - last.at < VIDEO_EVENT_COOLDOWN_MS) return false;
+
+    lastVideoEventRef.current = { type, turn: state.turnCount, at: now };
+    return true;
   }
 
   function playVideoUrls(type: VideoEventType, urls: string[]) {
@@ -923,8 +942,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const gs = gameStateRef.current;
     const baseKey = makeVideoKey(type, gs.role, gs.location, gs.turnCount);
     const segmentCount = type === 'ending' ? 4 : 1;
-    setVideoStatus(type === 'ending' ? '结局影像生成中...' : '记忆影像生成中...');
     try {
+      setVideoStatus(type === 'ending' ? '结局影像生成中...' : type === 'glitch' ? '时空裂缝生成中...' : '记忆影像生成中...');
       const readyAssets = await Promise.all(Array.from({ length: segmentCount }, (_, index) => {
         const key = segmentCount === 1 ? baseKey : `${baseKey}:segment-${index + 1}`;
         const segmentPrompt = segmentCount === 1 ? prompt : endingSegmentPrompt(prompt, index);
@@ -1058,7 +1077,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
       {visualCue && (
-        <div className="pointer-events-none absolute inset-0 z-30 mix-blend-screen">
+        <div className={`pointer-events-none absolute z-30 mix-blend-screen ${
+          visualCue === 'memory'
+            ? 'inset-x-4 top-[28vh] bottom-28 overflow-hidden rounded-2xl'
+            : 'inset-x-0 top-0 h-[35vh] overflow-hidden'
+        }`}>
           <div className="absolute inset-0 bg-cyan-400/10 animate-pulse" />
           <div className="absolute inset-y-0 left-0 w-1/2 translate-x-2 bg-amber-300/10 blur-sm" />
           <div className="absolute inset-x-0 top-1/3 h-px bg-amber-100/35" />
@@ -1067,7 +1090,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         </div>
       )}
       {videoCue && (
-        <div className={`pointer-events-none absolute inset-0 z-30 overflow-hidden ${videoCue.type === 'glitch' ? 'mix-blend-screen' : ''}`}>
+        <div className={`pointer-events-none absolute z-30 overflow-hidden ${
+          videoCue.type === 'ending'
+            ? 'inset-0 bg-stone-950'
+            : videoCue.type === 'memory'
+              ? 'inset-x-4 top-[28vh] bottom-28 rounded-2xl border border-amber-300/10 bg-stone-950/25'
+              : 'inset-x-0 top-0 h-[35vh] mix-blend-screen'
+        }`}>
           <video
             key={`${videoCue.type}-${videoCue.index}-${videoCue.urls[videoCue.index]}`}
             src={videoCue.urls[videoCue.index]}
@@ -1084,7 +1113,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             onEnded={finishVideoPlayback}
             onError={() => setVideoCue(null)}
           />
-          <div className="absolute inset-0 bg-stone-950/25" />
+          <div className={`absolute inset-0 ${videoCue.type === 'ending' ? 'bg-stone-950/15' : 'bg-stone-950/25'}`} />
         </div>
       )}
       {videoStatus && (
@@ -1102,12 +1131,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <span className="text-amber-600/20 text-xs">场景浮现中...</span>
         </div>
       )}
-      {shareStatus && (
-        <div className="absolute inset-x-0 top-12 z-30 text-center">
-          <span className="rounded-full border border-amber-500/15 bg-stone-950/60 px-3 py-1 text-xs text-amber-300/60">{shareStatus}</span>
-        </div>
-      )}
-
       {/* Header bar — compact, translucent, on top of image */}
       <div className="flex-none px-4 py-1.5 bg-stone-950/50 backdrop-blur-sm grid grid-cols-[1fr_auto_1fr] items-center z-20 relative">
         <button onClick={onExit} className="justify-self-start text-amber-500/50 text-xs hover:text-amber-400 transition-colors">
@@ -1239,15 +1262,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
 
       {shareImageUrl && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" onClick={() => setShareImageUrl('')}>
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div className="relative z-10 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={() => setShareImageUrl('')}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-amber-700/20 bg-stone-950/95 px-4 pb-5 pt-4 shadow-2xl sm:mx-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="font-handwriting text-2xl text-amber-200/90">分享这段旅程</div>
+                <div className="text-xs text-amber-500/40">长按图片保存，发给朋友</div>
+              </div>
+              <button onClick={() => setShareImageUrl('')} className="text-sm text-amber-500/45 hover:text-amber-300">
+                关闭
+              </button>
+            </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shareImageUrl} alt="分享卡片" className="w-full rounded-lg shadow-2xl" />
-            <p className="text-center text-amber-400/60 text-xs mt-3">长按图片保存，分享给朋友</p>
-            <button onClick={() => setShareImageUrl('')} className="mt-3 w-full py-2 rounded-lg border border-amber-800/20 bg-stone-900/60 text-amber-400/60 text-sm hover:text-amber-300/80">
-              关闭
-            </button>
+            <img src={shareImageUrl} alt="分享卡片" className="mx-auto max-h-[72vh] w-auto max-w-full rounded-xl border border-amber-900/20 shadow-2xl" />
           </div>
         </div>
       )}

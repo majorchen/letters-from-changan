@@ -9,6 +9,7 @@ export interface VideoAsset {
   prompt: string;
   taskId?: string;
   url?: string;
+  urls?: string[];
   createdAt: number;
   updatedAt: number;
 }

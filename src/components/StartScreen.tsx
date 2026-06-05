@@ -1,10 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ROLES } from '@/lib/prompts';
-import { SaveSummary, exportSaves, importSaves } from '@/lib/gameState';
-import { canUseCloudSaves, getCloudUserEmail, sendCloudLoginLink, signOutCloud, syncCloudSaves } from '@/lib/cloudSaves';
+import { SaveSummary } from '@/lib/gameState';
+import { canUseCloudSaves, getCloudUserEmail, sendCloudLoginOtp, signOutCloud, syncCloudSaves, verifyCloudLoginOtp } from '@/lib/cloudSaves';
 
 interface Props {
   onStart: (role: string) => void;
@@ -24,8 +24,15 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
   const [saveNotice, setSaveNotice] = useState('');
   const [cloudEmail, setCloudEmail] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSentTo, setOtpSentTo] = useState('');
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
-  const importInputRef = useRef<HTMLInputElement>(null);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+
+  useEffect(() => {
+    refreshCloudUser();
+  }, []);
 
   useEffect(() => {
     if (showSavePicker) {
@@ -33,43 +40,44 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
     }
   }, [showSavePicker]);
 
-  function handleExportSaves() {
-    const blob = new Blob([exportSaves()], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `letters-from-changan-saves-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setSaveNotice('旅程已导出');
-    window.setTimeout(() => setSaveNotice(''), 1800);
-  }
-
-  async function handleImportSaves(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const count = importSaves(await file.text());
-      onSavesChanged();
-      setSaveNotice(count > 0 ? `已导入${count}段旅程` : '没有可导入的旅程');
-    } catch {
-      setSaveNotice('导入失败');
-    } finally {
-      event.target.value = '';
-      window.setTimeout(() => setSaveNotice(''), 2200);
-    }
-  }
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = window.setTimeout(() => setOtpCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [otpCooldown]);
 
   async function refreshCloudUser() {
     setCloudEmail(await getCloudUserEmail() || '');
   }
 
-  async function handleCloudLogin() {
+  async function handleSendOtp() {
     setCloudBusy(true);
-    const result = await sendCloudLoginLink(loginEmail);
+    setSaveNotice('');
+    const result = await sendCloudLoginOtp(loginEmail);
+    if (result.ok) {
+      setOtpSentTo(loginEmail.trim());
+      setOtpCode('');
+      setOtpCooldown(60);
+    }
     setSaveNotice(result.message);
     setCloudBusy(false);
-    window.setTimeout(() => setSaveNotice(''), 2600);
+    window.setTimeout(() => setSaveNotice(''), result.ok ? 3000 : 5200);
+  }
+
+  async function handleVerifyOtp() {
+    setCloudBusy(true);
+    setSaveNotice('');
+    const result = await verifyCloudLoginOtp(otpSentTo || loginEmail, otpCode);
+    if (result.ok) {
+      onSavesChanged();
+      await refreshCloudUser();
+      window.setTimeout(() => setShowLoginModal(false), 650);
+      setOtpSentTo('');
+      setOtpCode('');
+    }
+    setSaveNotice(result.message);
+    setCloudBusy(false);
+    window.setTimeout(() => setSaveNotice(''), result.ok ? 3000 : 5200);
   }
 
   async function handleCloudSync() {
@@ -91,6 +99,118 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
     setSaveNotice('已退出云存档');
     setCloudBusy(false);
     window.setTimeout(() => setSaveNotice(''), 2200);
+  }
+
+  function closeLoginModal() {
+    if (cloudBusy) return;
+    setShowLoginModal(false);
+    setSaveNotice('');
+  }
+
+  function handleOtpChange(value: string) {
+    setOtpCode(value.replace(/\D/g, '').slice(0, 6));
+  }
+
+  function renderOtpBoxes() {
+    return (
+      <div className="grid grid-cols-6 gap-2">
+        {Array.from({ length: 6 }, (_, index) => (
+          <input
+            key={index}
+            value={otpCode[index] || ''}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              if (nextValue.length > 1) {
+                handleOtpChange(otpCode.slice(0, index) + nextValue + otpCode.slice(index + 1));
+                return;
+              }
+              const chars = otpCode.split('');
+              chars[index] = nextValue.replace(/\D/g, '');
+              handleOtpChange(chars.join(''));
+              if (nextValue && index < 5) {
+                const next = document.getElementById(`otp-${index + 1}`);
+                next?.focus();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Backspace' && !otpCode[index] && index > 0) {
+                const prev = document.getElementById(`otp-${index - 1}`);
+                prev?.focus();
+              }
+            }}
+            onPaste={(event) => {
+              event.preventDefault();
+              handleOtpChange(event.clipboardData.getData('text'));
+            }}
+            id={`otp-${index}`}
+            inputMode="numeric"
+            maxLength={1}
+            className="h-12 rounded-lg border border-amber-700/25 bg-stone-900/80 text-center text-lg text-amber-100 outline-none transition-colors focus:border-amber-400/55"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function renderLoginModal() {
+    if (!canUseCloudSaves() || cloudEmail) return null;
+    return (
+      <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeLoginModal} />
+        <div className="relative z-10 w-full max-w-md mx-4 mb-4 sm:mb-0 rounded-2xl border border-amber-700/25 bg-stone-950/95 p-5 shadow-2xl animate-letter-slide">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div className="text-left">
+              <h2 className="font-handwriting text-3xl text-amber-200/95">登录来信长安</h2>
+              <p className="mt-1 text-xs leading-relaxed text-amber-500/45">用邮箱接收验证码，旅程会在设备间同步。</p>
+            </div>
+            <button onClick={closeLoginModal} className="text-sm text-amber-500/45 hover:text-amber-300">
+              关闭
+            </button>
+          </div>
+
+          {!otpSentTo ? (
+            <div className="space-y-3">
+              <input
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                placeholder="邮箱地址"
+                className="w-full rounded-lg border border-amber-800/20 bg-stone-900/80 px-4 py-3 text-sm text-amber-100/85 placeholder:text-amber-600/35 focus:outline-none"
+              />
+              <button
+                disabled={cloudBusy || !loginEmail.trim()}
+                onClick={handleSendOtp}
+                className="w-full rounded-lg bg-amber-700/85 py-3 text-sm text-stone-50 transition-colors hover:bg-amber-600 disabled:opacity-40"
+              >
+                {cloudBusy ? '发送中...' : '发送验证码'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-left text-xs leading-relaxed text-amber-300/65">✉️ 验证码已发送到 {otpSentTo}</div>
+              {renderOtpBoxes()}
+              <button
+                disabled={cloudBusy || otpCode.length !== 6}
+                onClick={handleVerifyOtp}
+                className="w-full rounded-lg bg-amber-700/85 py-3 text-sm text-stone-50 transition-colors hover:bg-amber-600 disabled:opacity-40"
+              >
+                {cloudBusy ? '同步中...' : '确认登录'}
+              </button>
+              <button
+                disabled={cloudBusy || otpCooldown > 0}
+                onClick={handleSendOtp}
+                className="w-full text-xs text-amber-500/55 hover:text-amber-300/80 disabled:opacity-40"
+              >
+                {otpCooldown > 0 ? `重新发送（${otpCooldown}s）` : '重新发送'}
+              </button>
+            </div>
+          )}
+
+          {saveNotice && (
+            <div className="mt-3 text-center text-xs text-amber-300/65">{saveNotice}</div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -153,9 +273,18 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
             </button>
           )}
 
+          {!cloudEmail && canUseCloudSaves() && (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/85 text-stone-50 hover:bg-amber-600 transition-all backdrop-blur-sm"
+            >
+              登录 · 跨设备同步旅程
+            </button>
+          )}
+
           {/* Role selection */}
           <div className="text-amber-400/50 text-xs mb-3 tracking-widest">
-            {hasSaves ? '— 或开始新的旅程 —' : '— 选择你的身份 —'}
+            {hasSaves ? '— 或开始新的旅程 —' : cloudEmail ? '— 选择你的身份 —' : '— 或 先体验一下 —'}
           </div>
           <div className="grid grid-cols-2 gap-3">
             {Object.entries(ROLES).map(([key, role]) => (
@@ -172,7 +301,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
           </div>
 
           <p className="text-amber-800/30 text-xs mt-6">
-            AI 驱动 · 每次游戏都是独一无二的故事
+            {cloudEmail ? `☁️ 已登录 · ${cloudEmail}` : '未登录 · 旅程仅保存在本设备'}
           </p>
         </div>
       </div>
@@ -213,51 +342,30 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
             </div>
             <div className="border-t border-amber-800/15 px-4 py-3">
               {saveNotice && <div className="mb-2 text-center text-xs text-amber-400/45">{saveNotice}</div>}
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={handleExportSaves} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80">
-                  导出旅程
-                </button>
-                <button onClick={() => importInputRef.current?.click()} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80">
-                  导入旅程
-                </button>
-              </div>
-              <input ref={importInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportSaves} />
-              <div className="mt-3 border-t border-amber-800/10 pt-3">
+              <div className="text-center">
                 {canUseCloudSaves() ? (
                   cloudEmail ? (
-                    <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
-                      <div className="truncate text-xs text-amber-500/45">{cloudEmail}</div>
-                      <div className="flex gap-2">
-                        <button disabled={cloudBusy} onClick={handleCloudSync} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80 disabled:opacity-40">
-                          云同步
-                        </button>
-                        <button disabled={cloudBusy} onClick={handleCloudSignOut} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-500/45 hover:text-amber-300/70 disabled:opacity-40">
-                          退出
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                      <input
-                        value={loginEmail}
-                        onChange={(event) => setLoginEmail(event.target.value)}
-                        onFocus={refreshCloudUser}
-                        placeholder="邮箱登录云存档"
-                        className="min-w-0 rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-200/80 placeholder:text-amber-600/30 focus:outline-none"
-                      />
-                      <button disabled={cloudBusy} onClick={handleCloudLogin} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80 disabled:opacity-40">
-                        发送链接
+                    <div className="flex items-center justify-center gap-3 text-xs">
+                      <span className="truncate text-amber-500/50">☁️ 已同步 · {cloudEmail}</span>
+                      <button disabled={cloudBusy} onClick={handleCloudSync} className="text-amber-400/65 hover:text-amber-300 disabled:opacity-40">
+                        同步
+                      </button>
+                      <button disabled={cloudBusy} onClick={handleCloudSignOut} className="text-amber-500/45 hover:text-amber-300/75 disabled:opacity-40">
+                        登出
                       </button>
                     </div>
+                  ) : (
+                    <button onClick={() => setShowLoginModal(true)} className="text-xs text-amber-400/60 hover:text-amber-300/85">
+                      登录可跨设备同步
+                    </button>
                   )
-                ) : (
-                  <div className="text-center text-xs text-amber-900/35">云存档未配置，本机旅程会继续保存在浏览器中</div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
         </div>
       )}
+      {showLoginModal && renderLoginModal()}
     </div>
   );
 }

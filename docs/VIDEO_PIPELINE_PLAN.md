@@ -20,6 +20,7 @@ Current implementation:
 - Status route: `GET /api/video?taskId=...`
 - Config override: `AGNES_VIDEO_MODEL`, defaulting to `agnes-video-v2.0`
 - The route returns normalized `{ taskId, status, progress, url, raw }`.
+- Durable storage: when `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured, completed video files are copied into Supabase Storage bucket `story-videos`.
 
 ## Runtime Principle
 
@@ -27,10 +28,10 @@ Do not make the player wait for real-time video generation during a story beat.
 
 Preferred flow:
 
-1. Generate and cache candidate videos ahead of the beat when the triggering state becomes likely.
-2. Store video metadata with a stable event key.
-3. When `[STATE] VISUAL` requests a video event, play cached media if available.
-4. If video is not ready, fall back to the current CSS `glitch` or `memory` effect.
+1. Do not pre-generate large video sets.
+2. When `[STATE] VISUAL` requests a video event, create a task with a stable event key.
+3. If cached media is ready, play it immediately.
+4. If video is not ready, fall back to the current CSS `glitch` or `memory` effect and keep the generated asset cached for later.
 
 ## Event Types
 
@@ -53,7 +54,7 @@ Preferred flow:
 - Trigger: act 3 closure.
 - Duration: 20-30 seconds.
 - Placement: UI fades away; scene expands to full-screen video; fade to black and final line.
-- Current state: not implemented. Needs multi-segment generation and ffmpeg stitching.
+- Current state: implemented as four ~5 second clips played back-to-back in the UI. No ffmpeg stitching.
 
 ## Cache Shape
 
@@ -75,5 +76,5 @@ type VideoAsset = {
 
 ## Decisions Needed From Major
 
-- Whether Vercel should store generated URLs only, or whether assets need durable storage.
-- Whether ffmpeg runs in a build/tooling step, a server job, or local pre-generation.
+- Storage decision: use Supabase Storage free tier for durable generated clips during weekend testing.
+- ffmpeg decision: do not stitch clips. Play multiple generated segments continuously in the UI.

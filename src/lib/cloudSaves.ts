@@ -31,7 +31,7 @@ export async function getCloudUserEmail(): Promise<string | null> {
   return data.user?.email || null;
 }
 
-export async function sendCloudLoginLink(email: string): Promise<CloudSyncResult> {
+export async function sendCloudLoginOtp(email: string): Promise<CloudSyncResult> {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: '云存档未配置' };
   const cleanedEmail = email.trim();
@@ -39,11 +39,32 @@ export async function sendCloudLoginLink(email: string): Promise<CloudSyncResult
   const { error } = await supabase.auth.signInWithOtp({
     email: cleanedEmail,
     options: {
-      emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+      shouldCreateUser: true,
     },
   });
-  if (error) return { ok: false, message: error.message };
-  return { ok: true, message: '登录链接已发送，请查看邮箱' };
+  if (error) {
+    const message = /send|email|smtp|magic link/i.test(error.message)
+      ? '验证码暂时发送失败，请稍后再试'
+      : error.message;
+    return { ok: false, message };
+  }
+  return { ok: true, message: `验证码已发送到 ${cleanedEmail}` };
+}
+
+export async function verifyCloudLoginOtp(email: string, token: string): Promise<CloudSyncResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, message: '云存档未配置' };
+  const cleanedEmail = email.trim();
+  const cleanedToken = token.trim();
+  if (!cleanedEmail) return { ok: false, message: '请输入邮箱' };
+  if (!/^\d{6}$/.test(cleanedToken)) return { ok: false, message: '请输入6位验证码' };
+  const { error } = await supabase.auth.verifyOtp({
+    email: cleanedEmail,
+    token: cleanedToken,
+    type: 'email',
+  });
+  if (error) return { ok: false, message: '验证码错误，请重试' };
+  return syncCloudSaves();
 }
 
 export async function signOutCloud(): Promise<void> {
