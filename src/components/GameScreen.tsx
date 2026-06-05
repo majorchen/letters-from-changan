@@ -231,6 +231,12 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
     if (key === 'SECOND_CORRESPONDENT' && value.toLowerCase() !== 'none') {
       update.secondCorrespondentHint = value;
     }
+    if (key === 'VISUAL') {
+      const visual = value.toLowerCase();
+      if (visual === 'none' || visual === 'glitch' || visual === 'memory') {
+        update.visualCue = visual;
+      }
+    }
     if (key === 'INPUT') {
       const inputMode = value.toLowerCase();
       if (inputMode === 'options' || inputMode === 'free') {
@@ -261,6 +267,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
+  const [visualCue, setVisualCue] = useState<'glitch' | 'memory' | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
@@ -423,6 +430,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       // === Extract everything from RAW content, display CLEANED content ===
       const rawContent = fullContent;
       const cleanContent = cleanNarrative(rawContent);
+      const narrativeState = parseNarrativeState(rawContent);
+      if (narrativeState?.visualCue === 'glitch' || narrativeState?.visualCue === 'memory') {
+        setVisualCue(narrativeState.visualCue);
+        window.setTimeout(() => setVisualCue(null), narrativeState.visualCue === 'memory' ? 2600 : 1400);
+      }
 
       // 1. Scene image — prefer the AI's current-shot [SCENE:] tag every turn.
       //    Keyword presets are only fallback when the model omits a scene tag.
@@ -463,7 +475,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 2. Mailbox trigger (from raw)
       const mailboxTriggered = rawContent.includes('[MAILBOX]');
-      const narrativeState = parseNarrativeState(rawContent);
       const updated = updateChapter(gs, rawContent, narrativeState);
       const pendingFirstMailbox = mailboxTriggered || narrativeState?.mailbox === 'pending_first_open';
 
@@ -801,6 +812,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             onError={() => setSceneImage(null)}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
+        </div>
+      )}
+      {visualCue && (
+        <div className="pointer-events-none absolute inset-0 z-30 mix-blend-screen">
+          <div className="absolute inset-0 bg-cyan-400/10 animate-pulse" />
+          <div className="absolute inset-y-0 left-0 w-1/2 translate-x-2 bg-amber-300/10 blur-sm" />
+          <div className="absolute inset-x-0 top-1/3 h-px bg-amber-100/35" />
+          <div className="absolute inset-x-0 top-2/3 h-px bg-cyan-100/25" />
+          {visualCue === 'memory' && <div className="absolute inset-10 border border-amber-200/10 bg-amber-100/5 blur-[1px]" />}
         </div>
       )}
       {imageLoading && !sceneImage && (

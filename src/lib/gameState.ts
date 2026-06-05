@@ -35,6 +35,7 @@ export interface NarrativeStateUpdate {
   npcMemories?: Record<string, NpcMemory>;
   eventVersions?: Record<string, Record<string, string>>;
   secondCorrespondentHint?: string;
+  visualCue?: 'none' | 'glitch' | 'memory';
   inputMode?: 'options' | 'free';
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
