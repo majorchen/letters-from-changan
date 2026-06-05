@@ -530,7 +530,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerReply: null, letterHistory: currentHistory }),
+        body: JSON.stringify({ playerReply: null, letterHistory: currentHistory, playerState: gs }),
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`Letter request failed: ${res.status}`);

@@ -9,6 +9,16 @@ type LetterItem = {
   content: string;
 };
 
+type LetterPlayerContext = {
+  role?: string;
+  location?: string;
+  chapter?: string;
+  events?: string[];
+  knownNPCs?: string[];
+  narrativeSummary?: string;
+  eventVersions?: Record<string, Record<string, string>>;
+};
+
 function cleanLetterHistory(value: unknown): LetterItem[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -22,6 +32,20 @@ function cleanLetterHistory(value: unknown): LetterItem[] {
       from: letter.from,
       content: letter.content.slice(0, 1200),
     }));
+}
+
+function cleanPlayerContext(value: unknown): LetterPlayerContext {
+  if (!value || typeof value !== 'object') return {};
+  const state = value as Record<string, unknown>;
+  return {
+    role: typeof state.role === 'string' ? state.role.slice(0, 40) : undefined,
+    location: typeof state.location === 'string' ? state.location.slice(0, 80) : undefined,
+    chapter: typeof state.chapter === 'string' ? state.chapter.slice(0, 60) : undefined,
+    events: Array.isArray(state.events) ? state.events.filter((item): item is string => typeof item === 'string').slice(-8) : [],
+    knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs.filter((item): item is string => typeof item === 'string').slice(-8) : [],
+    narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary.slice(0, 280) : undefined,
+    eventVersions: state.eventVersions && typeof state.eventVersions === 'object' ? state.eventVersions as Record<string, Record<string, string>> : {},
+  };
 }
 
 function getClient() {
@@ -50,6 +74,20 @@ function getLetterArcInstruction(letterNumber: number): string {
   return `这是林深写出的第${letterNumber}封信。林深已经变了：更诚实也更危险。必须承接玩家最近回信，推进一个个人秘密碎片或2077碎片，但仍保留悬念。`;
 }
 
+function buildWorldEchoInstruction(context: LetterPlayerContext): string {
+  const lines: string[] = [];
+  if (context.location) lines.push(`玩家当前在长安的地点：${context.location}`);
+  if (context.narrativeSummary) lines.push(`玩家最近经历摘要：${context.narrativeSummary}`);
+  if (context.events && context.events.length > 0) lines.push(`长安已发生事件：${context.events.join('、')}`);
+  if (context.knownNPCs && context.knownNPCs.length > 0) lines.push(`玩家认识的人：${context.knownNPCs.join('、')}`);
+  const versionEntries = Object.entries(context.eventVersions || {}).slice(-4);
+  if (versionEntries.length > 0) {
+    lines.push(`已记录矛盾版本：${versionEntries.map(([event, sources]) => `${event}(${Object.keys(sources).join('/')})`).join('、')}`);
+  }
+  if (lines.length === 0) return '';
+  return `\n\n## 长安回响\n${lines.join('\n')}\n写信时可以让2077和上述长安事件产生微弱回声：林深可以提到某个后世痕迹、误认一个NPC或对某个事件表现出不该有的熟悉。但不要直接解释真相。`;
+}
+
 const FALLBACK_FIRST_LETTER = `陌生的收信人：
 
 我不知道这封信会不会抵达你手里。过去很久，我把许多纸片投进这个旧邮箱，只听见它们落下去的声音，从没有回响。
@@ -65,9 +103,11 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
   }
 
-  const { playerReply, letterHistory } = await req.json();
+  const { playerReply, letterHistory, playerState } = await req.json();
   const cleanedHistory = cleanLetterHistory(letterHistory);
   const cleanedReply = typeof playerReply === 'string' ? playerReply.slice(0, 1200) : null;
+  const playerContext = cleanPlayerContext(playerState);
+  const worldEchoInstruction = buildWorldEchoInstruction(playerContext);
   const linShenLetterCount = cleanedHistory.filter((letter) => letter.from === 'linShen').length;
   const nextLetterNumber = linShenLetterCount + 1;
 
@@ -87,15 +127,15 @@ export async function POST(req: NextRequest) {
   if (cleanedReply) {
     messages.push({
       role: 'user',
-      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)} 请写林深的下一封回信。`,
+      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction} 请写林深的下一封回信。`,
     });
   } else if (cleanedHistory.length > 0) {
     messages.push({
       role: 'user',
-      content: `请根据以上完整通信历史，写林深的下一封回信。${getLetterArcInstruction(nextLetterNumber)} 必须回应玩家最近一封信里的具体内容，不要重复之前已经写过的信，不要重新写第一封信。`,
+      content: `请根据以上完整通信历史，写林深的下一封回信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction} 必须回应玩家最近一封信里的具体内容，不要重复之前已经写过的信，不要重新写第一封信。`,
     });
   } else {
-    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)} 请写第一封信给这位刚到长安的外乡人。` });
+    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction} 请写第一封信给这位刚到长安的外乡人。` });
   }
 
   try {
