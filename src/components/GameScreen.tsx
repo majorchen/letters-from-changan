@@ -869,7 +869,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   async function prepareVideoSegment(type: VideoEventType, prompt: string, key: string, segmentIndex: number): Promise<VideoAsset | null> {
     const cached = getVideoAsset(key);
-    if (cached?.status === 'ready' && (cached.url || cached.urls?.[0])) return cached;
+    if (cached?.status === 'ready' && cached.url) return cached;
     if (cached?.status === 'queued') return pollVideoAsset(cached);
 
     const res = await fetch('/api/video', {
@@ -915,7 +915,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         return prepareVideoSegment(type, segmentPrompt, key, index);
       }));
       const urls = readyAssets
-        .map((asset) => asset?.url || asset?.urls?.[0] || '')
+        .map((asset) => asset?.url || '')
         .filter(Boolean);
       if (urls.length === segmentCount) {
         playVideoUrls(type, urls);
