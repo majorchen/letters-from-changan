@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Fonts loaded via next/font/google in layout.tsx — auto-localized, no external request */
+/* System Song-style serif stack. Avoids build-time external font fetches. */
 
 :root {
   --amber-gold: #d4a574;
@@ -17,11 +17,11 @@
 }
 
 body {
-  font-family: var(--font-serif), 'Songti SC', 'SimSun', serif;
+  font-family: 'Songti SC', 'SimSun', 'STSong', 'Noto Serif CJK SC', serif;
 }
 
 .font-handwriting {
-  font-family: var(--font-serif), 'Songti SC', 'SimSun', serif;
+  font-family: 'Songti SC', 'SimSun', 'STSong', 'Noto Serif CJK SC', serif;
   font-weight: 700;
 }
 

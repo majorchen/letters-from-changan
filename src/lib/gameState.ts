@@ -62,6 +62,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  hidden?: boolean;
   isLetter?: boolean;
   sceneImage?: string;
   options?: string[];

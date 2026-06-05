@@ -41,6 +41,7 @@ const LOCATION_KEYWORDS = [
 ];
 
 const GAME_URL = 'https://letters-from-changan.vercel.app';
+const REPLY_LETTER_COOLDOWN_TURNS = 28;
 
 // Strip all tags and option lines from displayed narrative text.
 // Handles unclosed [SCENE: during streaming, and removes 【选项X】 lines.
@@ -195,6 +196,45 @@ function getShareExcerpt(messages: ChatMessage[], activeLetter = ''): string {
     .filter((content) => content.length >= 40)
     .filter((content) => !content.includes('眼前是宽阔的朱雀大街，人群熙攘。你需要先找个落脚的地方。'));
   return candidates[0] || '';
+}
+
+function buildJourneyReport(state: PlayerState, messages: ChatMessage[], sceneImage: string | null) {
+  const assistantMessages = messages.filter((message) => message.role === 'assistant');
+  const repeatedOpenings = assistantMessages
+    .map((message) => message.content.replace(/\s+/g, ' ').slice(0, 80))
+    .filter(Boolean)
+    .filter((snippet, index, snippets) => snippets.indexOf(snippet) !== index);
+
+  return {
+    app: 'letters-from-changan',
+    reportVersion: 1,
+    exportedAt: new Date().toISOString(),
+    summary: {
+      role: state.role,
+      location: state.location,
+      chapter: state.chapter,
+      turnCount: state.turnCount,
+      storyPhase: state.storyPhase,
+      storyTime: state.storyTime,
+      messageCount: messages.length,
+      assistantMessageCount: assistantMessages.length,
+      letterCount: state.letterHistory.length,
+      linShenLetterCount: state.letterHistory.filter((letter) => letter.from === 'linShen').length,
+      playerLetterCount: state.letterHistory.filter((letter) => letter.from === 'player').length,
+      eventCount: state.events.length,
+      npcCount: state.knownNPCs.length,
+    },
+    checks: {
+      hasNarrativeSummary: Boolean(state.narrativeSummary),
+      hasMailboxState: Boolean(state.mailbox),
+      unreadLetterCount: getUnreadLetterCount(state),
+      repeatedOpeningRisk: repeatedOpenings.length > 0,
+      repeatedOpenings: repeatedOpenings.slice(-5),
+    },
+    state,
+    messages,
+    latestSceneImage: sceneImage,
+  };
 }
 
 function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
@@ -369,25 +409,26 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    if (hasDiscoveredMailbox(gameState) && getUnreadLetterCount(gameState) > 0 && gameState.chapter !== 'mailbox_found') {
-      setShowMailbox(true);
+    if (hasDiscoveredMailbox(gameState) && getUnreadLetterCount(gameState) === 0) {
+      setShowMailbox(false);
     }
   }, [gameState]);
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, options: { visibleUser?: boolean } = {}) {
     const gs = gameStateRef.current; // always-fresh state (avoids closure staleness)
     const msgs = messagesRef.current;
+    const visibleUser = options.visibleUser !== false;
 
     messageCounterRef.current++;
-    const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
-    const newMessages = [...msgs, userMsg];
+    const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now(), hidden: !visibleUser };
+    const newMessages = visibleUser ? [...msgs, userMsg] : msgs;
     setMessages(newMessages);
     setInput('');
     setIsStreaming(true);
 
     const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: Date.now() };
     const playerStateForApi = { ...gs, crossLineEchoes: getCrossLineEchoes(gs.role) };
-    const apiMessages = newMessages
+    const apiMessages = [...msgs, userMsg]
       .filter(m => m.role !== 'system')
       .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
@@ -515,17 +556,27 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         return;
       }
 
-      // 3. New letter after replying (every 5 interactions)
+      // 3. New letters after replying are deliberately sparse.
+      //    If the model asks for MAILBOX: unread too soon, keep the mailbox quiet.
       if (updated.chapter === 'letter_replied' && getUnreadLetterCount(updated) === 0) {
         const turnsSinceLastLetter = updated.turnCount - updated.mailbox.lastGeneratedAtTurn;
-        if (turnsSinceLastLetter >= 5) {
+        if (turnsSinceLastLetter >= REPLY_LETTER_COOLDOWN_TURNS) {
           updated.mailbox = {
             ...updated.mailbox,
             discovered: true,
             unread: [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
             lastGeneratedAtTurn: updated.turnCount,
           };
-          setShowMailbox(true);
+          setShowMailbox(false);
+        }
+      } else if (updated.chapter === 'letter_replied' && getUnreadLetterCount(updated) > 0) {
+        const turnsSinceLastLetter = updated.turnCount - (gs.mailbox.lastGeneratedAtTurn || 0);
+        if (turnsSinceLastLetter < REPLY_LETTER_COOLDOWN_TURNS) {
+          updated.mailbox = {
+            ...updated.mailbox,
+            unread: [],
+            lastGeneratedAtTurn: gs.mailbox.lastGeneratedAtTurn || updated.mailbox.lastGeneratedAtTurn,
+          };
         }
       }
 
@@ -588,6 +639,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         },
         letterHistory: [...currentHistory, { from: 'linShen', content, timestamp: Date.now() }],
       };
+      gameStateRef.current = updated;
       onStateChange(updated);
       saveGameState(updated);
     } catch (err) {
@@ -612,6 +664,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       },
       letterHistory: [...gs.letterHistory, { from: 'player', content: reply, timestamp: Date.now() }],
     };
+    gameStateRef.current = updated;
     onStateChange(updated);
     saveGameState(updated);
 
@@ -623,7 +676,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
     // Auto-continue narration after letter
     setTimeout(() => {
-      sendMessage(buildLetterContinuationPrompt(updated, 'reply'));
+      sendMessage(buildLetterContinuationPrompt(updated, 'reply'), { visibleUser: false });
     }, 800);
   }
 
@@ -631,7 +684,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowLetter(false);
     // Always continue narration after closing letter
     setTimeout(() => {
-      sendMessage(buildLetterContinuationPrompt(gameStateRef.current, 'read'));
+      sendMessage(buildLetterContinuationPrompt(gameStateRef.current, 'read'), { visibleUser: false });
     }, 800);
   }
 
@@ -733,6 +786,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
+  function handleExportJourneyReport() {
+    const report = buildJourneyReport(gameStateRef.current, messagesRef.current, sceneImage);
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `letters-from-changan-report-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setShareStatus('试玩报告已导出');
+    window.setTimeout(() => setShareStatus(''), 1800);
+  }
+
   // Generate scene image with caching. cacheKey identifies the location;
   // if already generated, reuse instantly instead of regenerating.
   async function generateSceneImage(scene: string, cacheKey: string) {
@@ -788,6 +854,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   const roleInfo = ROLES[gameState.role];
+  const unreadLetterCount = getUnreadLetterCount(gameState);
+  const shouldGlowLetterBox = unreadLetterCount > 0;
 
   // Prologue
   if (gamePhase === 'prologue') {
@@ -872,10 +940,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
         <div className="justify-self-end flex min-w-10 items-center justify-end">
+          <button onClick={handleExportJourneyReport} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="导出试玩报告">
+            ⬇
+          </button>
           <button onClick={handleShareCard} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="生成分享卡片">
             🕊️
           </button>
-          <button onClick={() => setShowLetterBox(true)} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
+          <button
+            onClick={() => shouldGlowLetterBox ? openLetter() : setShowLetterBox(true)}
+            className={`flex h-7 w-7 items-center justify-center text-sm hover:text-amber-400 ${
+              shouldGlowLetterBox ? 'text-amber-300/90 animate-pulse-glow' : 'text-amber-400/40'
+            }`}
+            title={shouldGlowLetterBox ? '新信到了' : '信匣'}
+          >
             📜
           </button>
         </div>
@@ -887,7 +964,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         <div className="h-[28vh]" />
 
         <div className="max-w-lg mx-auto space-y-5">
-          {messages.map((msg, i) => (
+          {messages.filter((msg) => !msg.hidden).map((msg, i) => (
             <div
               key={i}
               className={`animate-fade-in-up ${

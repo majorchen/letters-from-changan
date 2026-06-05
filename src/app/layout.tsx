@@ -1,13 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
-
-const notoSerif = Noto_Serif_SC({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-serif",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "来信长安 | Letters from Chang'an",
@@ -42,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={`h-full ${notoSerif.variable}`}>
+    <html lang="zh-CN" className="h-full">
       <body className="h-full bg-stone-950 text-amber-50 overflow-hidden">
         {children}
       </body>
