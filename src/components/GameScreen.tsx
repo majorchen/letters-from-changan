@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import QRCode from 'qrcode';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
 import { PlayerState, ROLES } from '@/lib/prompts';
@@ -38,6 +39,8 @@ const LOCATION_KEYWORDS = [
   { keyword: '道观', scene: 'A quiet Taoist temple in Tang Dynasty Chang an, incense smoke curling upward, ancient cypress trees, a priest sweeping stone steps in golden afternoon light' },
   { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an at dusk, narrow alleys between courtyard houses, children playing, the smell of cooking, warm lanterns being lit' },
 ];
+
+const GAME_URL = 'https://letters-from-changan.vercel.app';
 
 // Strip all tags and option lines from displayed narrative text.
 // Handles unclosed [SCENE: during streaming, and removes 【选项X】 lines.
@@ -180,6 +183,16 @@ function buildLetterContinuationPrompt(state: PlayerState, mode: 'read' | 'reply
   }
 
   return `（我收好林深的来信。请从当前位置"${location}"继续，不要重置剧情；让信里的一个具体细节自然影响我接下来观察长安的方式。最近这封信的大意是："${latestLinLetter || '林深写来了一封来自远方的信'}"。不要默认回客栈，不要凭空反复引入黑衣人。）`;
+}
+
+function getShareExcerpt(messages: ChatMessage[]): string {
+  const candidates = [...messages]
+    .reverse()
+    .filter((message) => message.role === 'assistant')
+    .map((message) => message.content.replace(/\s+/g, ' ').trim())
+    .filter((content) => content.length >= 40)
+    .filter((content) => !content.includes('眼前是宽阔的朱雀大街，人群熙攘。你需要先找个落脚的地方。'));
+  return candidates[0] || '';
 }
 
 function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
@@ -641,8 +654,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   async function handleShareCard() {
-    const lastAssistant = [...messagesRef.current].reverse().find((message) => message.role === 'assistant');
-    if (!lastAssistant?.content) return;
+    const shareExcerpt = getShareExcerpt(messagesRef.current);
+    if (!shareExcerpt) return;
 
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
@@ -671,11 +684,28 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
     ctx.fillStyle = 'rgba(254, 243, 199, 0.78)';
     ctx.font = '38px serif';
-    wrapCanvasText(ctx, lastAssistant.content.slice(0, 260), 96, 360, 888, 62, 11);
+    wrapCanvasText(ctx, shareExcerpt.slice(0, 260), 96, 360, 888, 62, 10);
+
+    const qrCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qrCanvas, GAME_URL, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 190,
+      color: {
+        dark: '#1c1917',
+        light: '#fef3c7',
+      },
+    });
+    ctx.fillStyle = 'rgba(254, 243, 199, 0.92)';
+    ctx.fillRect(96, 1170, 218, 218);
+    ctx.drawImage(qrCanvas, 110, 1184, 190, 190);
 
     ctx.fillStyle = 'rgba(251, 191, 36, 0.44)';
     ctx.font = '26px serif';
-    ctx.fillText('letters-from-changan.vercel.app', 96, 1310);
+    ctx.fillText(GAME_URL.replace('https://', ''), 340, 1255);
+    ctx.fillStyle = 'rgba(254, 243, 199, 0.58)';
+    ctx.font = '24px serif';
+    ctx.fillText('扫码进入这座长安', 340, 1300);
 
     const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) return;
