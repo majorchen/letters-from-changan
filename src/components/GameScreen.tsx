@@ -674,14 +674,25 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     let line = '';
     let currentY = y;
     let lineCount = 0;
+    const drawEllipsisLine = (rawLine: string) => {
+      let finalLine = rawLine;
+      while (finalLine && ctx.measureText(`${finalLine}...`).width > maxWidth) {
+        finalLine = finalLine.slice(0, -1);
+      }
+      ctx.fillText(`${finalLine}...`, x, currentY);
+    };
+
     for (const char of chars) {
       const testLine = line + char;
       if (ctx.measureText(testLine).width > maxWidth && line) {
+        if (lineCount >= maxLines - 1) {
+          drawEllipsisLine(line);
+          return;
+        }
         ctx.fillText(line, x, currentY);
         line = char;
         currentY += lineHeight;
         lineCount += 1;
-        if (lineCount >= maxLines) return;
       } else {
         line = testLine;
       }
@@ -695,7 +706,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
-    canvas.height = 1440;
+    canvas.height = 1680;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -788,7 +799,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const excerptW = 824;
     ctx.fillStyle = 'rgba(254,243,199,0.76)';
     ctx.font = '34px serif';
-    wrapCanvasText(ctx, shareExcerpt.slice(0, 460), excerptX, excerptY, excerptW, 58, 8);
+    wrapCanvasText(ctx, shareExcerpt, excerptX, excerptY, excerptW, 58, 10);
 
     const qrCanvas = document.createElement('canvas');
     await QRCode.toCanvas(qrCanvas, GAME_URL, {
@@ -799,7 +810,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     });
     const qrSize = 236;
     const qrX = (canvas.width - qrSize) / 2;
-    const qrY = 1110;
+    const qrY = 1320;
     ctx.fillStyle = '#faf7ef';
     ctx.beginPath();
     ctx.roundRect(qrX, qrY, qrSize, qrSize, 20);
@@ -809,10 +820,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(253,230,138,0.78)';
     ctx.font = '700 31px serif';
-    ctx.fillText(GAME_URL.replace('https://', ''), canvas.width / 2, 1384);
+    ctx.fillText(GAME_URL.replace('https://', ''), canvas.width / 2, 1620);
     ctx.fillStyle = 'rgba(254,243,199,0.58)';
     ctx.font = '26px serif';
-    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', canvas.width / 2, 1422);
+    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', canvas.width / 2, 1660);
 
     const dataUrl = canvas.toDataURL('image/png');
     setShareImageUrl(dataUrl);
@@ -1256,9 +1267,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
 
       {shareImageUrl && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-5 sm:items-center sm:py-6" onClick={() => setShareImageUrl('')}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={() => setShareImageUrl('')}>
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <div className="relative z-10 flex max-h-[88vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[1.5rem] border border-amber-700/20 bg-stone-950/95 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative z-10 mx-4 mb-4 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-amber-700/25 bg-stone-950/90 shadow-2xl sm:mb-0" onClick={(e) => e.stopPropagation()}>
             <div className="flex-none border-b border-amber-900/15 px-5 pb-4 pt-5">
               <div className="flex items-start justify-between gap-4">
               <div>
@@ -1270,7 +1281,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               </button>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={shareImageUrl} alt="分享卡片" className="mx-auto w-full rounded-xl border border-amber-900/20 shadow-2xl" />
             </div>
