@@ -228,6 +228,9 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
         };
       }
     }
+    if (key === 'SECOND_CORRESPONDENT' && value.toLowerCase() !== 'none') {
+      update.secondCorrespondentHint = value;
+    }
     if (key === 'INPUT') {
       const inputMode = value.toLowerCase();
       if (inputMode === 'options' || inputMode === 'free') {

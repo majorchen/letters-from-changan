@@ -34,6 +34,7 @@ export interface NarrativeStateUpdate {
   summary?: string;
   npcMemories?: Record<string, NpcMemory>;
   eventVersions?: Record<string, Record<string, string>>;
+  secondCorrespondentHint?: string;
   inputMode?: 'options' | 'free';
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
@@ -96,6 +97,7 @@ function normalizePlayerState(state: PlayerState): PlayerState {
     narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary : '',
     npcMemories: state.npcMemories && typeof state.npcMemories === 'object' ? state.npcMemories : {},
     eventVersions: state.eventVersions && typeof state.eventVersions === 'object' ? state.eventVersions : {},
+    secondCorrespondentHints: Array.isArray(state.secondCorrespondentHints) ? state.secondCorrespondentHints : [],
     storyTime: state.storyTime || INITIAL_STATE.storyTime,
     storyPhase,
     awaitingFreeInput: Boolean(state.awaitingFreeInput),
@@ -402,6 +404,12 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
         ...sources,
       };
     }
+  }
+  if (narrativeState?.secondCorrespondentHint) {
+    updated.secondCorrespondentHints = Array.from(new Set([
+      ...(updated.secondCorrespondentHints || []),
+      narrativeState.secondCorrespondentHint.slice(0, 160),
+    ])).slice(-12);
   }
   if (narrativeState?.inputMode === 'free') {
     const farEnough = updated.turnCount - (updated.lastFreeInputTurn || 0) >= 12;

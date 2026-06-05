@@ -18,6 +18,7 @@ type LetterPlayerContext = {
   narrativeSummary?: string;
   eventVersions?: Record<string, Record<string, string>>;
   crossLineEchoes?: string[];
+  secondCorrespondentHints?: string[];
 };
 
 function cleanLetterHistory(value: unknown): LetterItem[] {
@@ -47,6 +48,7 @@ function cleanPlayerContext(value: unknown): LetterPlayerContext {
     narrativeSummary: typeof state.narrativeSummary === 'string' ? state.narrativeSummary.slice(0, 280) : undefined,
     eventVersions: state.eventVersions && typeof state.eventVersions === 'object' ? state.eventVersions as Record<string, Record<string, string>> : {},
     crossLineEchoes: Array.isArray(state.crossLineEchoes) ? state.crossLineEchoes.filter((item): item is string => typeof item === 'string').slice(0, 4) : [],
+    secondCorrespondentHints: Array.isArray(state.secondCorrespondentHints) ? state.secondCorrespondentHints.filter((item): item is string => typeof item === 'string').slice(-4) : [],
   };
 }
 
@@ -83,6 +85,7 @@ function buildWorldEchoInstruction(context: LetterPlayerContext): string {
   if (context.events && context.events.length > 0) lines.push(`长安已发生事件：${context.events.join('、')}`);
   if (context.knownNPCs && context.knownNPCs.length > 0) lines.push(`玩家认识的人：${context.knownNPCs.join('、')}`);
   if (context.crossLineEchoes && context.crossLineEchoes.length > 0) lines.push(`其他角色线回声：${context.crossLineEchoes.join(' / ')}`);
+  if (context.secondCorrespondentHints && context.secondCorrespondentHints.length > 0) lines.push(`第二通信人线索：${context.secondCorrespondentHints.join(' / ')}`);
   const versionEntries = Object.entries(context.eventVersions || {}).slice(-4);
   if (versionEntries.length > 0) {
     lines.push(`已记录矛盾版本：${versionEntries.map(([event, sources]) => `${event}(${Object.keys(sources).join('/')})`).join('、')}`);

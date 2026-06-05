@@ -35,6 +35,7 @@ EVENTS: 本轮新增事件代码，用英文 snake_case；没有则写 none
 SUMMARY: 用一句话更新到目前为止的叙事摘要，包含玩家最新决定；不要超过80字
 NPC_MEMORY: 本轮重要NPC记忆，格式为 NPC名|态度|新事实；多个用分号分隔；没有则写 none
 EVENT_VERSION: 事件名|来源|这个来源的说法；多个用分号分隔；没有则写 none
+SECOND_CORRESPONDENT: 第二通信人的新线索；没有则写 none
 INPUT: options / free
 MAILBOX: none / pending_first_open / unread / quiet
 [/STATE]
@@ -129,6 +130,7 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
 - 叙事摘要：${playerState.narrativeSummary || "暂无"}
 - NPC记忆：${formatNpcMemories(playerState.npcMemories)}
 - 跨线回声：${formatCrossLineEchoes(playerState.crossLineEchoes)}
+- 第二通信人线索：${formatSecondCorrespondentHints(playerState.secondCorrespondentHints)}
 - 自由输入次数：${playerState.freeInputCount || 0}/3
 - 邮箱状态：${mailbox.discovered ? (mailbox.unread.length > 0 || mailbox.pendingFirstOpen ? "有未读信件（发光中）" : "安静") : "未发现"}
 - 游戏阶段：${playerState.chapter}
@@ -163,7 +165,10 @@ ${sliceOfLifeGuide}
 如果玩家选择"追问「某事件」的不同说法"，必须围绕事件版本里已有的来源回应，让NPC或环境对矛盾产生反应；不要用新事件岔开，也不要直接给最终答案。
 
 ## 跨线呼应
-跨线回声只能轻轻出现：NPC提到"前阵子有个商人/书生/乐师/游侠"，或林深说自己似乎也在给另一个人写信。不要破坏当前单线体验，不要要求玩家必须知道其他存档。`;
+跨线回声只能轻轻出现：NPC提到"前阵子有个商人/书生/乐师/游侠"，或林深说自己似乎也在给另一个人写信。不要破坏当前单线体验，不要要求玩家必须知道其他存档。
+
+## 第二通信人
+第二通信人现在只允许作为线索存在，不要生成第二封信正文，也不要新开信件 UI。可以用纸角、错投称呼、林深提到"另一个人"等方式埋线索；如果出现新线索，写入 SECOND_CORRESPONDENT。`;
 }
 
 function getSliceOfLifeGuide(state: PlayerState): string {
@@ -416,6 +421,7 @@ export interface PlayerState {
   npcMemories: Record<string, NpcMemory>;
   eventVersions: Record<string, Record<string, string>>;
   crossLineEchoes?: string[];
+  secondCorrespondentHints: string[];
   storyTime: StoryTime;
   storyPhase: StoryPhase;
   awaitingFreeInput: boolean;
@@ -519,6 +525,11 @@ function formatCrossLineEchoes(echoes?: string[]): string {
   return echoes.slice(0, 4).join("\n");
 }
 
+function formatSecondCorrespondentHints(hints: string[]): string {
+  if (!hints || hints.length === 0) return "暂无";
+  return hints.slice(-4).join("；");
+}
+
 function formatAnchorFragments(state: PlayerState): string {
   const phase = getStoryPhase(state).phase;
   const seenEvents = new Set(state.events || []);
@@ -591,6 +602,7 @@ export const INITIAL_STATE: Omit<PlayerState, 'role'> = {
   narrativeSummary: "",
   npcMemories: {},
   eventVersions: {},
+  secondCorrespondentHints: [],
   storyTime: {
     day: 1,
     period: "清晨",

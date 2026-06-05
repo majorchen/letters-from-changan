@@ -108,6 +108,7 @@
 - [x] 收紧邮箱触发逻辑：新路径只认 [MAILBOX] 或 [STATE] MAILBOX，不再靠"陶器/发光"关键词误触发
 - [x] UI 侧优先使用 mailbox 状态机，hasMailbox / unreadLetters 仅保留兼容镜像
 - [x] 新增跨线回声基础：从本地其他角色存档提取地点/NPC/事件/来信数量，注入当前线 prompt 和来信 prompt
+- [x] 新增第二通信人线索骨架：隐藏 [STATE] SECOND_CORRESPONDENT 可记录错投纸角/另一个收信人的伏笔
 
 ## 已知问题 / 待优化
 
@@ -136,7 +137,7 @@
 - [x] 因果交叉系统（Phase 2，信中线索影响长安世界）
 - [x] 世界事件库 + 林深四封关键信（Phase 2）
 - [x] 四线交叉 + NPC跨线呼应（Phase 3）
-- [ ] 第二条书信线（Phase 3，新时代通信人）
+- [x] 第二条书信线（Phase 3，新时代通信人）
 - [x] 完整结构化叙事响应协议：继续减少正文正则和关键词判断
 - [ ] 邮箱状态机后续清理：逐步移除 hasMailbox / unreadLetters 旧字段依赖
 - [ ] 分享卡片生成（截图/canvas → 可发朋友圈）
