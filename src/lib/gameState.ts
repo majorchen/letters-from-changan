@@ -337,7 +337,7 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
     }
   }
 
-  if (state.chapter === 'mailbox_found' && content.includes('信')) {
+  if (!narrativeState && state.chapter === 'mailbox_found' && content.includes('信')) {
     updated.chapter = 'first_letter_read';
     updated.mailbox = {
       ...updated.mailbox,
@@ -346,12 +346,12 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
     };
   }
 
-  if (content.includes('阿依')) {
+  if (!narrativeState?.npcs && content.includes('阿依')) {
     if (!updated.knownNPCs.includes('阿依')) {
       updated.knownNPCs = [...updated.knownNPCs, '阿依'];
     }
   }
-  if (content.includes('李无名')) {
+  if (!narrativeState?.npcs && content.includes('李无名')) {
     if (!updated.knownNPCs.includes('李无名')) {
       updated.knownNPCs = [...updated.knownNPCs, '李无名'];
     }
@@ -366,7 +366,7 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
     { keyword: '城门', location: '长安城门' },
     { keyword: '道观', location: '道观' },
   ];
-  const locationHint = locationHints.find((hint) => content.includes(hint.keyword));
+  const locationHint = !narrativeState?.location ? locationHints.find((hint) => content.includes(hint.keyword)) : undefined;
   if (locationHint) {
     updated.location = locationHint.location;
   }
