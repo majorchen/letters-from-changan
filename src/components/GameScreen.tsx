@@ -734,16 +734,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       bgImg.src = '/bg-changan.webp';
     });
 
-    let curY = 104;
+    let curY = 96;
 
     await new Promise<void>((resolve) => {
       const icon = new window.Image();
       icon.crossOrigin = 'anonymous';
       icon.onload = () => {
-        const s = 104;
+        const s = 112;
         const ix = (canvas.width - s) / 2;
         const iy = curY;
-        const r = 22;
+        const r = 24;
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(ix, iy, s, s, r);
@@ -761,64 +761,58 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       icon.src = '/icon-192.png';
     });
 
-    curY += 138;
+    curY += 230;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fde68a';
-    ctx.font = '700 72px serif';
+    ctx.font = '700 68px serif';
     ctx.fillText('来信长安', canvas.width / 2, curY);
     ctx.fillStyle = 'rgba(251,191,36,0.58)';
     ctx.font = 'italic 30px serif';
     ctx.fillText("Letters from Chang'an", canvas.width / 2, curY + 48);
-    curY += 152;
+    curY += 142;
 
     ctx.fillStyle = 'rgba(253,230,138,0.88)';
     ctx.font = '700 42px serif';
     ctx.fillText('你在唐朝收到了', canvas.width / 2, curY);
     ctx.fillText('一封来自2077年的信', canvas.width / 2, curY + 58);
-    curY += 128;
+    curY += 120;
 
     ctx.fillStyle = 'rgba(245,158,11,0.60)';
     ctx.font = '26px serif';
     ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, canvas.width / 2, curY);
-    curY += 54;
+    curY += 74;
 
     ctx.textAlign = 'left';
-    const excerptX = 92;
+    const excerptX = 128;
     const excerptY = curY;
-    const excerptW = 896;
-    const excerptH = 440;
-    ctx.fillStyle = 'rgba(28,25,23,0.58)';
-    ctx.strokeStyle = 'rgba(245,158,11,0.18)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(excerptX, excerptY, excerptW, excerptH, 24);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(254,243,199,0.78)';
+    const excerptW = 824;
+    ctx.fillStyle = 'rgba(254,243,199,0.76)';
     ctx.font = '34px serif';
-    wrapCanvasText(ctx, shareExcerpt.slice(0, 420), excerptX + 42, excerptY + 68, excerptW - 84, 56, 7);
+    wrapCanvasText(ctx, shareExcerpt.slice(0, 460), excerptX, excerptY, excerptW, 58, 8);
 
     const qrCanvas = document.createElement('canvas');
     await QRCode.toCanvas(qrCanvas, GAME_URL, {
       errorCorrectionLevel: 'M',
       margin: 1,
-      width: 190,
-      color: { dark: '#1c1917', light: '#fef3c7' },
+      width: 204,
+      color: { dark: '#1c1917', light: '#faf7ef' },
     });
-    const qrX = 96;
-    const qrY = 1184;
-    ctx.fillStyle = '#fef3c7';
+    const qrSize = 236;
+    const qrX = (canvas.width - qrSize) / 2;
+    const qrY = 1110;
+    ctx.fillStyle = '#faf7ef';
     ctx.beginPath();
-    ctx.roundRect(qrX, qrY, 218, 218, 18);
+    ctx.roundRect(qrX, qrY, qrSize, qrSize, 20);
     ctx.fill();
-    ctx.drawImage(qrCanvas, qrX + 14, qrY + 14, 190, 190);
+    ctx.drawImage(qrCanvas, qrX + 16, qrY + 16, 204, 204);
 
+    ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(253,230,138,0.78)';
-    ctx.font = '700 28px serif';
-    ctx.fillText(GAME_URL.replace('https://', ''), 350, 1264);
+    ctx.font = '700 31px serif';
+    ctx.fillText(GAME_URL.replace('https://', ''), canvas.width / 2, 1384);
     ctx.fillStyle = 'rgba(254,243,199,0.58)';
-    ctx.font = '25px serif';
-    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 350, 1310);
+    ctx.font = '26px serif';
+    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', canvas.width / 2, 1422);
 
     const dataUrl = canvas.toDataURL('image/png');
     setShareImageUrl(dataUrl);
@@ -1262,10 +1256,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
 
       {shareImageUrl && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={() => setShareImageUrl('')}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-5 sm:items-center sm:py-6" onClick={() => setShareImageUrl('')}>
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-amber-700/20 bg-stone-950/95 px-4 pb-5 pt-4 shadow-2xl sm:mx-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
+          <div className="relative z-10 flex max-h-[88vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[1.5rem] border border-amber-700/20 bg-stone-950/95 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex-none border-b border-amber-900/15 px-5 pb-4 pt-5">
+              <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="font-handwriting text-2xl text-amber-200/90">分享这段旅程</div>
                 <div className="text-xs text-amber-500/40">长按图片保存，发给朋友</div>
@@ -1273,9 +1268,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
               <button onClick={() => setShareImageUrl('')} className="text-sm text-amber-500/45 hover:text-amber-300">
                 关闭
               </button>
+              </div>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shareImageUrl} alt="分享卡片" className="mx-auto max-h-[72vh] w-auto max-w-full rounded-xl border border-amber-900/20 shadow-2xl" />
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={shareImageUrl} alt="分享卡片" className="mx-auto w-full rounded-xl border border-amber-900/20 shadow-2xl" />
+            </div>
           </div>
         </div>
       )}
