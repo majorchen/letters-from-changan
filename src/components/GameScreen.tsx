@@ -260,6 +260,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [showLetterBox, setShowLetterBox] = useState(false);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [shareStatus, setShareStatus] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
@@ -612,6 +613,87 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }, 800);
   }
 
+  function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number): void {
+    const chars = text.replace(/\s+/g, '').split('');
+    let line = '';
+    let currentY = y;
+    let lineCount = 0;
+    for (const char of chars) {
+      const testLine = line + char;
+      if (ctx.measureText(testLine).width > maxWidth && line) {
+        ctx.fillText(line, x, currentY);
+        line = char;
+        currentY += lineHeight;
+        lineCount += 1;
+        if (lineCount >= maxLines) return;
+      } else {
+        line = testLine;
+      }
+    }
+    if (line && lineCount < maxLines) ctx.fillText(line, x, currentY);
+  }
+
+  async function handleShareCard() {
+    const lastAssistant = [...messagesRef.current].reverse().find((message) => message.role === 'assistant');
+    if (!lastAssistant?.content) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1440;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#1c1917');
+    gradient.addColorStop(0.55, '#292524');
+    gradient.addColorStop(1, '#451a03');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.08)';
+    for (let i = 0; i < 140; i++) {
+      ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
+    }
+
+    ctx.fillStyle = '#fcd34d';
+    ctx.font = '700 56px serif';
+    ctx.fillText('来信长安', 96, 150);
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.58)';
+    ctx.font = '28px serif';
+    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, 96, 205);
+
+    ctx.fillStyle = 'rgba(254, 243, 199, 0.78)';
+    ctx.font = '38px serif';
+    wrapCanvasText(ctx, lastAssistant.content.slice(0, 260), 96, 360, 888, 62, 11);
+
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.44)';
+    ctx.font = '26px serif';
+    ctx.fillText('letters-from-changan.vercel.app', 96, 1310);
+
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) return;
+    const file = new File([blob], 'letters-from-changan-share.png', { type: 'image/png' });
+
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: '来信长安' });
+        setShareStatus('已唤起分享');
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.name;
+        link.click();
+        URL.revokeObjectURL(url);
+        setShareStatus('卡片已保存');
+      }
+    } catch {
+      setShareStatus('');
+    } finally {
+      window.setTimeout(() => setShareStatus(''), 1800);
+    }
+  }
+
   // Generate scene image with caching. cacheKey identifies the location;
   // if already generated, reuse instantly instead of regenerating.
   async function generateSceneImage(scene: string, cacheKey: string) {
@@ -726,6 +808,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <span className="text-amber-600/20 text-xs">场景浮现中...</span>
         </div>
       )}
+      {shareStatus && (
+        <div className="absolute inset-x-0 top-12 z-30 text-center">
+          <span className="rounded-full border border-amber-500/15 bg-stone-950/60 px-3 py-1 text-xs text-amber-300/60">{shareStatus}</span>
+        </div>
+      )}
 
       {/* Header bar — compact, translucent, on top of image */}
       <div className="flex-none px-4 py-1.5 bg-stone-950/50 backdrop-blur-sm grid grid-cols-[1fr_auto_1fr] items-center z-20 relative">
@@ -737,6 +824,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
         <div className="justify-self-end flex min-w-10 items-center justify-end">
+          <button onClick={handleShareCard} className="flex h-7 w-7 items-center justify-center text-amber-400/35 hover:text-amber-400 text-sm" title="生成分享卡片">
+            ↗
+          </button>
           <button onClick={() => setShowLetterBox(true)} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
             📜
           </button>
