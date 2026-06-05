@@ -88,6 +88,20 @@ function buildWorldEchoInstruction(context: LetterPlayerContext): string {
   return `\n\n## 长安回响\n${lines.join('\n')}\n写信时可以让2077和上述长安事件产生微弱回声：林深可以提到某个后世痕迹、误认一个NPC或对某个事件表现出不该有的熟悉。但不要直接解释真相。`;
 }
 
+function getRoleKeyLetterInstruction(context: LetterPlayerContext, letterNumber: number): string {
+  if (letterNumber < 3) return '';
+  const role = context.role || '';
+  const roleGuide: Record<string, string> = {
+    merchant: '商人线的2077碎片：经济系统曾高度自动化，后来信用和供应链同时崩塌。林深可以提到价格、债务、合成粮、配给或旧市场遗址。',
+    scholar: '书生线的2077碎片：文化记忆出现断层，许多典籍只剩摘要和模型重写版本。林深可以提到他分不清原文与重构文本。',
+    wanderer: '游侠线的2077碎片：未来并不和平，城市安全由算法和私人武装共同维持。林深可以提到封锁、身份识别、无人巡逻或消失的人。',
+    musician: '乐师线的2077碎片：AI替代了绝大多数创作，真人演奏变成奢侈或违法的怀旧。林深可以提到被自动生成音乐淹没的生活。',
+  };
+  const guide = roleGuide[role];
+  if (!guide) return '';
+  return `\n\n## 本线关键信碎片\n${guide}\n第三封信以后，每封信最多露出其中一个碎片。不要像设定说明一样完整解释。`;
+}
+
 const FALLBACK_FIRST_LETTER = `陌生的收信人：
 
 我不知道这封信会不会抵达你手里。过去很久，我把许多纸片投进这个旧邮箱，只听见它们落下去的声音，从没有回响。
@@ -106,10 +120,11 @@ export async function POST(req: NextRequest) {
   const { playerReply, letterHistory, playerState } = await req.json();
   const cleanedHistory = cleanLetterHistory(letterHistory);
   const cleanedReply = typeof playerReply === 'string' ? playerReply.slice(0, 1200) : null;
-  const playerContext = cleanPlayerContext(playerState);
-  const worldEchoInstruction = buildWorldEchoInstruction(playerContext);
   const linShenLetterCount = cleanedHistory.filter((letter) => letter.from === 'linShen').length;
   const nextLetterNumber = linShenLetterCount + 1;
+  const playerContext = cleanPlayerContext(playerState);
+  const worldEchoInstruction = buildWorldEchoInstruction(playerContext);
+  const keyLetterInstruction = getRoleKeyLetterInstruction(playerContext, nextLetterNumber);
 
   const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
     { role: 'system', content: LETTER_WRITER_PROMPT },
@@ -127,15 +142,15 @@ export async function POST(req: NextRequest) {
   if (cleanedReply) {
     messages.push({
       role: 'user',
-      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction} 请写林深的下一封回信。`,
+      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写林深的下一封回信。`,
     });
   } else if (cleanedHistory.length > 0) {
     messages.push({
       role: 'user',
-      content: `请根据以上完整通信历史，写林深的下一封回信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction} 必须回应玩家最近一封信里的具体内容，不要重复之前已经写过的信，不要重新写第一封信。`,
+      content: `请根据以上完整通信历史，写林深的下一封回信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 必须回应玩家最近一封信里的具体内容，不要重复之前已经写过的信，不要重新写第一封信。`,
     });
   } else {
-    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction} 请写第一封信给这位刚到长安的外乡人。` });
+    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写第一封信给这位刚到长安的外乡人。` });
   }
 
   try {
