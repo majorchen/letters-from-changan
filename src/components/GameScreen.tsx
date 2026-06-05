@@ -849,11 +849,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       if (data.url || status === 'succeeded' || status === 'completed' || status === 'success') {
         const ready: VideoAsset = {
           ...asset,
-          status: 'ready',
+          status: 'ready' as const,
           url: data.url || asset.url,
-          urls: data.url ? [data.url] : asset.urls,
           updatedAt: Date.now(),
         };
+        if (data.url) ready.urls = [data.url];
+        else if (asset.urls) ready.urls = asset.urls;
         saveVideoAsset(ready);
         return ready;
       } else if (status === 'failed' || status === 'error') {
