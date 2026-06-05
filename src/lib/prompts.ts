@@ -150,7 +150,8 @@ ${sliceOfLifeGuide}
 如果自由输入次数已达到3次，或距离上次自由输入太近，不要再写 INPUT: free。
 
 ## 矛盾记录
-当林深、NPC或环境对同一件事给出不同说法时，不要急着纠正或解释。把不同说法写入 EVENT_VERSION，让矛盾成为可追踪线索。`;
+当林深、NPC或环境对同一件事给出不同说法时，不要急着纠正或解释。把不同说法写入 EVENT_VERSION，让矛盾成为可追踪线索。
+如果玩家选择"追问「某事件」的不同说法"，必须围绕事件版本里已有的来源回应，让NPC或环境对矛盾产生反应；不要用新事件岔开，也不要直接给最终答案。`;
 }
 
 function getSliceOfLifeGuide(state: PlayerState): string {
