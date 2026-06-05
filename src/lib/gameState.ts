@@ -167,6 +167,45 @@ export function listSaveSummaries(): SaveSummary[] {
     }));
 }
 
+export function exportSaves(): string {
+  migrateLegacySave();
+  return JSON.stringify({
+    app: 'letters-from-changan',
+    version: 1,
+    exportedAt: Date.now(),
+    saves: loadSaves(),
+  }, null, 2);
+}
+
+export function importSaves(raw: string): number {
+  const parsed = JSON.parse(raw) as { saves?: unknown };
+  const incoming = Array.isArray(parsed.saves) ? parsed.saves : [];
+  const validSaves = incoming
+    .filter((item): item is GameSave => {
+      if (!item || typeof item !== 'object') return false;
+      const save = item as Partial<GameSave>;
+      return typeof save.id === 'string' && typeof save.role === 'string' && Boolean(save.state);
+    })
+    .map((save) => ({
+      ...save,
+      state: normalizePlayerState(save.state),
+      messages: Array.isArray(save.messages) ? save.messages : [],
+      createdAt: save.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    }));
+
+  if (validSaves.length === 0) return 0;
+  const existing = loadSaves();
+  const existingIds = new Set(existing.map((save) => save.id));
+  const merged = [
+    ...validSaves.map((save) => existingIds.has(save.id) ? { ...save, id: makeId() } : save),
+    ...existing,
+  ];
+  saveSaves(merged);
+  if (!getActiveSaveId()) setActiveSaveId(merged[0].id);
+  return validSaves.length;
+}
+
 export function getCrossLineEchoes(currentRole: string): string[] {
   if (typeof window === 'undefined') return [];
   return loadSaves()

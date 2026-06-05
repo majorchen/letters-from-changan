@@ -45,7 +45,7 @@ export default function Home() {
   }
 
   if (screen === 'start') {
-    return <StartScreen onStart={handleStart} saves={saves} onContinue={handleContinue} />;
+    return <StartScreen onStart={handleStart} saves={saves} onContinue={handleContinue} onSavesChanged={() => setSaves(listSaveSummaries())} />;
   }
 
   if (screen === 'game' && gameState) {

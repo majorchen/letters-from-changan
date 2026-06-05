@@ -1,14 +1,15 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { ChangeEvent, useRef, useState } from 'react';
 import { ROLES } from '@/lib/prompts';
-import { SaveSummary } from '@/lib/gameState';
+import { SaveSummary, exportSaves, importSaves } from '@/lib/gameState';
 
 interface Props {
   onStart: (role: string) => void;
   saves: SaveSummary[];
   onContinue: (saveId: string) => void;
+  onSavesChanged: () => void;
 }
 
 function formatSaveTime(timestamp: number): string {
@@ -16,9 +17,38 @@ function formatSaveTime(timestamp: number): string {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function StartScreen({ onStart, saves, onContinue }: Props) {
+export default function StartScreen({ onStart, saves, onContinue, onSavesChanged }: Props) {
   const hasSaves = saves.length > 0;
   const [showSavePicker, setShowSavePicker] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  function handleExportSaves() {
+    const blob = new Blob([exportSaves()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `letters-from-changan-saves-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setSaveNotice('旅程已导出');
+    window.setTimeout(() => setSaveNotice(''), 1800);
+  }
+
+  async function handleImportSaves(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const count = importSaves(await file.text());
+      onSavesChanged();
+      setSaveNotice(count > 0 ? `已导入${count}段旅程` : '没有可导入的旅程');
+    } catch {
+      setSaveNotice('导入失败');
+    } finally {
+      event.target.value = '';
+      window.setTimeout(() => setSaveNotice(''), 2200);
+    }
+  }
 
   return (
     <div className="h-full flex flex-col items-end justify-end px-6 pb-8 relative overflow-hidden">
@@ -137,6 +167,18 @@ export default function StartScreen({ onStart, saves, onContinue }: Props) {
                   </button>
                 );
               })}
+            </div>
+            <div className="border-t border-amber-800/15 px-4 py-3">
+              {saveNotice && <div className="mb-2 text-center text-xs text-amber-400/45">{saveNotice}</div>}
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={handleExportSaves} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80">
+                  导出旅程
+                </button>
+                <button onClick={() => importInputRef.current?.click()} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80">
+                  导入旅程
+                </button>
+              </div>
+              <input ref={importInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportSaves} />
             </div>
           </div>
         </div>
