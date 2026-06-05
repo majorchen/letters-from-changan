@@ -840,8 +840,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
         <div className="justify-self-end flex min-w-10 items-center justify-end">
-          <button onClick={handleShareCard} className="flex h-7 w-7 items-center justify-center text-amber-400/35 hover:text-amber-400 text-sm" title="生成分享卡片">
-            ↗
+          <button onClick={handleShareCard} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="生成分享卡片">
+            🪶
           </button>
           <button onClick={() => setShowLetterBox(true)} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="信匣">
             📜
