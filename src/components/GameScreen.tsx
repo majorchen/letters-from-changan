@@ -138,11 +138,11 @@ function isMailboxOption(option: string, state: PlayerState): boolean {
 }
 
 function hasDiscoveredMailbox(state: PlayerState): boolean {
-  return Boolean(state.mailbox?.discovered || state.hasMailbox);
+  return Boolean(state.mailbox?.discovered);
 }
 
 function getUnreadLetterCount(state: PlayerState): number {
-  return state.mailbox?.unread?.length ?? state.unreadLetters ?? 0;
+  return state.mailbox?.unread?.length ?? 0;
 }
 
 function fallbackSceneFromNarrative(state: PlayerState, content: string): string {
@@ -479,7 +479,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const pendingFirstMailbox = mailboxTriggered || narrativeState?.mailbox === 'pending_first_open';
 
       if (pendingFirstMailbox && !hasDiscoveredMailbox(gs)) {
-        updated.hasMailbox = true;
         updated.chapter = 'mailbox_found';
         updated.mailbox = {
           ...updated.mailbox,
@@ -487,7 +486,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           pendingFirstOpen: true,
           unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
         };
-        updated.unreadLetters = updated.mailbox.unread.length;
         if (!updated.events.includes('发现邮箱')) {
           updated.events = [...updated.events, '发现邮箱'];
         }
@@ -512,7 +510,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             unread: [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
             lastGeneratedAtTurn: updated.turnCount,
           };
-          updated.unreadLetters = updated.mailbox.unread.length;
           setShowMailbox(true);
         }
       }
@@ -567,7 +564,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       const updated = {
         ...gs,
-        unreadLetters: 0,
         chapter: gs.chapter === 'mailbox_found' ? 'first_letter_read' : gs.chapter,
         mailbox: {
           ...gs.mailbox,

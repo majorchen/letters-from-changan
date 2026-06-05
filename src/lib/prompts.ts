@@ -431,8 +431,6 @@ export interface PlayerState {
   awaitingFreeInput: boolean;
   freeInputCount: number;
   lastFreeInputTurn: number;
-  hasMailbox: boolean;
-  unreadLetters: number;
   mailbox: MailboxState;
   letterHistory: { from: string; content: string; timestamp: number }[];
   turnCount: number;
@@ -591,9 +589,9 @@ export interface MailboxState {
 
 export function getMailboxState(state: Partial<PlayerState>): MailboxState {
   return state.mailbox || {
-    discovered: Boolean(state.hasMailbox),
-    pendingFirstOpen: Boolean(state.hasMailbox && state.unreadLetters && state.unreadLetters > 0 && state.chapter === "mailbox_found"),
-    unread: state.unreadLetters && state.unreadLetters > 0 ? [{ id: "legacy-unread", from: "linShen", createdAt: Date.now() }] : [],
+    discovered: false,
+    pendingFirstOpen: false,
+    unread: [],
     lastGeneratedAtTurn: 0,
   };
 }
@@ -615,8 +613,6 @@ export const INITIAL_STATE: Omit<PlayerState, 'role'> = {
   awaitingFreeInput: false,
   freeInputCount: 0,
   lastFreeInputTurn: 0,
-  hasMailbox: false,
-  unreadLetters: 0,
   mailbox: {
     discovered: false,
     pendingFirstOpen: false,

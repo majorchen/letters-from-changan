@@ -47,8 +47,6 @@ function normalizePlayerState(value: unknown): PlayerState | null {
     awaitingFreeInput: Boolean(state.awaitingFreeInput),
     freeInputCount: Number.isFinite(state.freeInputCount) ? Number(state.freeInputCount) : 0,
     lastFreeInputTurn: Number.isFinite(state.lastFreeInputTurn) ? Number(state.lastFreeInputTurn) : 0,
-    hasMailbox: mailbox.discovered,
-    unreadLetters: mailbox.unread.length,
     mailbox,
     letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory.slice(-12) as PlayerState['letterHistory'] : [],
     turnCount: Number.isFinite(state.turnCount) ? Number(state.turnCount) : 0,
