@@ -702,23 +702,41 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Background: bg-changan.webp + dark overlay
+    // Background: bg-changan.webp with object-cover (no stretching) + dark overlay matching StartScreen
     await new Promise<void>((resolve) => {
       const bgImg = new window.Image();
       bgImg.crossOrigin = 'anonymous';
       bgImg.onload = () => {
-        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-        const ov = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        ov.addColorStop(0, 'rgba(28,25,23,0.82)');
-        ov.addColorStop(0.5, 'rgba(28,25,23,0.88)');
-        ov.addColorStop(1, 'rgba(28,25,23,0.93)');
+        // object-cover: crop to fill without distortion
+        const imgRatio = bgImg.width / bgImg.height;
+        const canvasRatio = canvas.width / canvas.height;
+        let sx = 0, sy = 0, sw = bgImg.width, sh = bgImg.height;
+        if (imgRatio > canvasRatio) {
+          sw = bgImg.height * canvasRatio;
+          sx = (bgImg.width - sw) / 2;
+        } else {
+          sh = bgImg.width / canvasRatio;
+          sy = (bgImg.height - sh) / 2;
+        }
+        ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        // Overlay gradient matching StartScreen: from-stone-950 via-stone-950/70 to-stone-950/20 (bottom to top)
+        const ov = ctx.createLinearGradient(0, canvas.height, 0, 0);
+        ov.addColorStop(0, 'rgba(12,10,9,0.95)');
+        ov.addColorStop(0.4, 'rgba(12,10,9,0.75)');
+        ov.addColorStop(1, 'rgba(12,10,9,0.30)');
         ctx.fillStyle = ov;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Additional top darken
+        const topOv = ctx.createLinearGradient(0, 0, 0, 300);
+        topOv.addColorStop(0, 'rgba(12,10,9,0.50)');
+        topOv.addColorStop(1, 'transparent');
+        ctx.fillStyle = topOv;
+        ctx.fillRect(0, 0, canvas.width, 300);
         resolve();
       };
       bgImg.onerror = () => {
         const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        g.addColorStop(0, '#1c1917'); g.addColorStop(0.55, '#292524'); g.addColorStop(1, '#451a03');
+        g.addColorStop(0, '#0c0a09'); g.addColorStop(0.55, '#1c1917'); g.addColorStop(1, '#0c0a09');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         resolve();
@@ -726,13 +744,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       bgImg.src = '/bg-changan.webp';
     });
 
-    // Subtle particles
-    ctx.fillStyle = 'rgba(245,158,11,0.06)';
-    for (let i = 0; i < 100; i++) ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
-
     let curY = 80;
 
-    // App icon (rounded square)
+    // App icon (rounded square) — use apple-touch-icon which is more reliable
     await new Promise<void>((resolve) => {
       const icon = new window.Image();
       icon.crossOrigin = 'anonymous';
@@ -744,7 +758,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         ctx.clip();
         ctx.drawImage(icon, ix, iy, s, s);
         ctx.restore();
-        ctx.strokeStyle = 'rgba(251,191,36,0.25)';
+        ctx.strokeStyle = 'rgba(217,119,6,0.30)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.roundRect(ix, iy, s, s, r);
@@ -752,35 +766,36 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         resolve();
       };
       icon.onerror = () => resolve();
-      icon.src = '/favicon-192.png';
+      icon.src = '/apple-touch-icon.png';
     });
 
-    // Title next to icon
-    ctx.fillStyle = '#fcd34d';
+    // Title — match StartScreen: text-amber-200 = #fde68a
+    ctx.fillStyle = '#fde68a';
     ctx.font = '700 52px serif';
     ctx.fillText('来信长安', 168, curY + 40);
-    ctx.fillStyle = 'rgba(251,191,36,0.50)';
-    ctx.font = '22px serif';
+    // Subtitle — match StartScreen: text-amber-400/70
+    ctx.fillStyle = 'rgba(251,191,36,0.70)';
+    ctx.font = 'italic 22px serif';
     ctx.fillText("Letters from Chang'an", 168, curY + 72);
-    curY += 120;
-
-    // Hook line
-    ctx.fillStyle = 'rgba(252,211,77,0.85)';
-    ctx.font = '700 36px serif';
-    ctx.fillText('你在唐朝收到了', 96, curY);
-    ctx.fillText('一封来自2077年的信', 96, curY + 52);
     curY += 130;
 
-    // Role / location
-    ctx.fillStyle = 'rgba(251,191,36,0.50)';
-    ctx.font = '26px serif';
-    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, 96, curY);
-    curY += 60;
+    // Hook line — text-amber-400/40 style but slightly brighter for emphasis
+    ctx.fillStyle = 'rgba(251,191,36,0.55)';
+    ctx.font = '700 34px serif';
+    ctx.fillText('你在唐朝收到了', 96, curY);
+    ctx.fillText('一封来自2077年的信', 96, curY + 48);
+    curY += 120;
 
-    // Narrative excerpt
+    // Role / location — match StartScreen: text-amber-500/60
+    ctx.fillStyle = 'rgba(245,158,11,0.60)';
+    ctx.font = '24px serif';
+    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, 96, curY);
+    curY += 55;
+
+    // Narrative excerpt — match GameScreen text: text-amber-100 ≈ #fef3c7 at 0.78
     ctx.fillStyle = 'rgba(254,243,199,0.78)';
-    ctx.font = '36px serif';
-    wrapCanvasText(ctx, shareExcerpt.slice(0, 320), 96, curY, 888, 58, 10);
+    ctx.font = '34px serif';
+    wrapCanvasText(ctx, shareExcerpt.slice(0, 320), 96, curY, 888, 54, 10);
 
     // QR code
     const qrCanvas = document.createElement('canvas');
@@ -788,18 +803,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 190,
-      color: { dark: '#1c1917', light: '#fef3c7' },
+      color: { dark: '#0c0a09', light: '#fde68a' },
     });
-    ctx.fillStyle = 'rgba(254,243,199,0.92)';
+    ctx.fillStyle = 'rgba(253,230,138,0.90)';
     ctx.fillRect(96, 1170, 218, 218);
     ctx.drawImage(qrCanvas, 110, 1184, 190, 190);
 
-    ctx.fillStyle = 'rgba(251,191,36,0.50)';
-    ctx.font = '26px serif';
-    ctx.fillText(GAME_URL.replace('https://', ''), 340, 1250);
-    ctx.fillStyle = 'rgba(254,243,199,0.50)';
+    // QR text — match amber-400/70 and amber-500/60
+    ctx.fillStyle = 'rgba(251,191,36,0.60)';
     ctx.font = '24px serif';
-    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 340, 1295);
+    ctx.fillText(GAME_URL.replace('https://', ''), 340, 1250);
+    ctx.fillStyle = 'rgba(245,158,11,0.50)';
+    ctx.font = '22px serif';
+    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 340, 1290);
 
     const dataUrl = canvas.toDataURL('image/png');
     setShareImageUrl(dataUrl);
