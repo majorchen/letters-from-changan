@@ -82,7 +82,7 @@ function extractOptions(text: string): string[] {
 function fallbackOptions(state: PlayerState, content: string, playerInput = ''): string[] {
   const context = `${playerInput}\n${content}`;
   const contradictionOption = getContradictionOption(state);
-  if (state.chapter === 'mailbox_found' && state.unreadLetters > 0) {
+  if (state.chapter === 'mailbox_found' && getUnreadLetterCount(state) > 0) {
     return ['靠近那只发光的陶器', '先不理会，整理行李', '叫王掌柜来看看'];
   }
 
@@ -126,15 +126,23 @@ function withContradictionOption(options: string[], contradictionOption: string 
 }
 
 function ensureMailboxOption(options: string[], state: PlayerState): string[] {
-  if (state.chapter !== 'mailbox_found' || state.unreadLetters <= 0) return options;
+  if (state.chapter !== 'mailbox_found' || getUnreadLetterCount(state) <= 0) return options;
   if (options.some(option => option.includes('发光') || option.includes('陶器') || option.includes('邮箱'))) return options;
   return ['靠近那只发光的陶器', ...options].slice(0, 4);
 }
 
 function isMailboxOption(option: string, state: PlayerState): boolean {
   return state.chapter === 'mailbox_found'
-    && state.unreadLetters > 0
+    && getUnreadLetterCount(state) > 0
     && (option.includes('发光') || option.includes('陶器') || option.includes('邮箱'));
+}
+
+function hasDiscoveredMailbox(state: PlayerState): boolean {
+  return Boolean(state.mailbox?.discovered || state.hasMailbox);
+}
+
+function getUnreadLetterCount(state: PlayerState): number {
+  return state.mailbox?.unread?.length ?? state.unreadLetters ?? 0;
 }
 
 function fallbackSceneFromNarrative(state: PlayerState, content: string): string {
@@ -335,7 +343,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    if (gameState.hasMailbox && gameState.unreadLetters > 0 && gameState.chapter !== 'mailbox_found') {
+    if (hasDiscoveredMailbox(gameState) && getUnreadLetterCount(gameState) > 0 && gameState.chapter !== 'mailbox_found') {
       setShowMailbox(true);
     }
   }, [gameState]);
@@ -452,8 +460,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const mailboxTriggered = rawContent.includes('[MAILBOX]');
       const narrativeState = parseNarrativeState(rawContent);
       const updated = updateChapter(gs, rawContent, narrativeState);
+      const pendingFirstMailbox = mailboxTriggered || narrativeState?.mailbox === 'pending_first_open';
 
-      if ((mailboxTriggered || (rawContent.includes('陶器') && rawContent.includes('发光'))) && !gs.hasMailbox) {
+      if (pendingFirstMailbox && !hasDiscoveredMailbox(gs)) {
         updated.hasMailbox = true;
         updated.chapter = 'mailbox_found';
         updated.mailbox = {
@@ -478,7 +487,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       }
 
       // 3. New letter after replying (every 5 interactions)
-      if (updated.chapter === 'letter_replied' && updated.unreadLetters === 0) {
+      if (updated.chapter === 'letter_replied' && getUnreadLetterCount(updated) === 0) {
         const turnsSinceLastLetter = updated.turnCount - updated.mailbox.lastGeneratedAtTurn;
         if (turnsSinceLastLetter >= 5) {
           updated.mailbox = {

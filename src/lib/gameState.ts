@@ -293,7 +293,7 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
     }
   };
 
-  if (state.chapter === 'arrival' && (content.includes('客栈') || content.includes('安顿') || content.includes('住处'))) {
+  if (!narrativeState && state.chapter === 'arrival' && (content.includes('客栈') || content.includes('安顿') || content.includes('住处'))) {
     if (content.includes('邮箱') || content.includes('陶器') || content.includes('发光')) {
       updated.chapter = 'mailbox_found';
       updated.hasMailbox = true;
