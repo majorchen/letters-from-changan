@@ -853,8 +853,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           url: data.url || asset.url,
           updatedAt: Date.now(),
         };
-        if (data.url) ready.urls = [data.url];
-        else if (asset.urls) ready.urls = asset.urls;
         saveVideoAsset(ready);
         return ready;
       } else if (status === 'failed' || status === 'error') {
