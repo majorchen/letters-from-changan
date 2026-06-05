@@ -286,6 +286,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
+  const [shareImageUrl, setShareImageUrl] = useState('');
   const [visualCue, setVisualCue] = useState<'glitch' | 'memory' | null>(null);
   const [videoCue, setVideoCue] = useState<{ type: VideoEventType; urls: string[]; index: number } | null>(null);
   const [videoStatus, setVideoStatus] = useState('');
@@ -800,28 +801,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     ctx.font = '24px serif';
     ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 340, 1295);
 
-    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob) return;
-    const file = new File([blob], 'letters-from-changan-share.png', { type: 'image/png' });
-
-    try {
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: '来信长安' });
-        setShareStatus('已唤起分享');
-      } else {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = file.name;
-        link.click();
-        URL.revokeObjectURL(url);
-        setShareStatus('卡片已保存');
-      }
-    } catch {
-      setShareStatus('');
-    } finally {
-      window.setTimeout(() => setShareStatus(''), 1800);
-    }
+    const dataUrl = canvas.toDataURL('image/png');
+    setShareImageUrl(dataUrl);
   }
 
   function updatedVideoPrompt(state: PlayerState, content: string): string {
@@ -1240,6 +1221,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       )}
       {showLetterBox && (
         <LetterBox letters={gameState.letterHistory} onClose={() => setShowLetterBox(false)} />
+      )}
+
+      {shareImageUrl && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" onClick={() => setShareImageUrl('')}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative z-10 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={shareImageUrl} alt="分享卡片" className="w-full rounded-lg shadow-2xl" />
+            <p className="text-center text-amber-400/60 text-xs mt-3">长按图片保存，分享给朋友</p>
+            <button onClick={() => setShareImageUrl('')} className="mt-3 w-full py-2 rounded-lg border border-amber-800/20 bg-stone-900/60 text-amber-400/60 text-sm hover:text-amber-300/80">
+              关闭
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
