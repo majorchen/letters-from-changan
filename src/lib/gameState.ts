@@ -38,7 +38,7 @@ export interface NarrativeStateUpdate {
   npcMemories?: Record<string, NpcMemory>;
   eventVersions?: Record<string, Record<string, string>>;
   secondCorrespondentHint?: string;
-  visualCue?: 'none' | 'glitch' | 'memory';
+  visualCue?: 'none' | 'glitch' | 'memory' | 'ending';
   inputMode?: 'options' | 'free';
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
 }
@@ -75,7 +75,7 @@ function makeId(): string {
   return `save-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function loadSaves(): GameSave[] {
+export function loadSaves(): GameSave[] {
   if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem(SAVES_KEY);
   if (!raw) return [];
@@ -87,7 +87,7 @@ function loadSaves(): GameSave[] {
   }
 }
 
-function saveSaves(saves: GameSave[]): void {
+export function saveSaves(saves: GameSave[]): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(SAVES_KEY, JSON.stringify(saves));
 }
@@ -121,6 +121,16 @@ function normalizePlayerState(state: PlayerState): PlayerState {
     turnCount: state.turnCount || 0,
     actionsToday: state.actionsToday || 0,
     lastPlayDate: state.lastPlayDate || new Date().toISOString().split('T')[0],
+  };
+}
+
+export function normalizeGameSave(save: GameSave): GameSave {
+  return {
+    ...save,
+    state: normalizePlayerState(save.state),
+    messages: Array.isArray(save.messages) ? save.messages : [],
+    createdAt: save.createdAt || Date.now(),
+    updatedAt: save.updatedAt || Date.now(),
   };
 }
 

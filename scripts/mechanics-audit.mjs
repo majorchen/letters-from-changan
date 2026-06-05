@@ -7,6 +7,7 @@ const files = {
   layout: await readFile(new URL('../src/app/layout.tsx', import.meta.url), 'utf8'),
   globals: await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8'),
   video: await readFile(new URL('../src/app/api/video/route.ts', import.meta.url), 'utf8'),
+  start: await readFile(new URL('../src/components/StartScreen.tsx', import.meta.url), 'utf8'),
 };
 
 const checks = [
@@ -34,7 +35,7 @@ const checks = [
   },
   {
     name: 'video remains placeholder-gated',
-    pass: files.prompts.includes('VISUAL: none / glitch / memory') && files.game.includes("setVisualCue(narrativeState.visualCue)"),
+    pass: files.prompts.includes('VISUAL: none / glitch / memory / ending') && files.game.includes("setVisualCue(narrativeState.visualCue)"),
   },
   {
     name: 'Agnes video v2 route is configured',
@@ -42,6 +43,16 @@ const checks = [
       && files.video.includes('/videos')
       && files.video.includes('num_frames')
       && files.video.includes('frame_rate'),
+  },
+  {
+    name: 'cloud saves are optional and Supabase-backed',
+    pass: files.start.includes('云同步')
+      && files.start.includes('canUseCloudSaves')
+      && files.start.includes('sendCloudLoginLink'),
+  },
+  {
+    name: 'playtest report button is not in game header',
+    pass: !files.game.includes('handleExportJourneyReport') && !files.game.includes('导出试玩报告'),
   },
 ];
 

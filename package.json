@@ -14,6 +14,7 @@
     "mechanics:audit": "node scripts/mechanics-audit.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "next": "16.2.7",
     "openai": "^6.42.0",
     "qrcode": "^1.5.4",

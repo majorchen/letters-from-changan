@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
 import { PlayerState, ROLES } from '@/lib/prompts';
+import { getVideoAsset, makeVideoKey, saveVideoAsset, VideoAsset, VideoEventType } from '@/lib/videoCache';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
 import Prologue from './Prologue';
@@ -198,45 +199,6 @@ function getShareExcerpt(messages: ChatMessage[], activeLetter = ''): string {
   return candidates[0] || '';
 }
 
-function buildJourneyReport(state: PlayerState, messages: ChatMessage[], sceneImage: string | null) {
-  const assistantMessages = messages.filter((message) => message.role === 'assistant');
-  const repeatedOpenings = assistantMessages
-    .map((message) => message.content.replace(/\s+/g, ' ').slice(0, 80))
-    .filter(Boolean)
-    .filter((snippet, index, snippets) => snippets.indexOf(snippet) !== index);
-
-  return {
-    app: 'letters-from-changan',
-    reportVersion: 1,
-    exportedAt: new Date().toISOString(),
-    summary: {
-      role: state.role,
-      location: state.location,
-      chapter: state.chapter,
-      turnCount: state.turnCount,
-      storyPhase: state.storyPhase,
-      storyTime: state.storyTime,
-      messageCount: messages.length,
-      assistantMessageCount: assistantMessages.length,
-      letterCount: state.letterHistory.length,
-      linShenLetterCount: state.letterHistory.filter((letter) => letter.from === 'linShen').length,
-      playerLetterCount: state.letterHistory.filter((letter) => letter.from === 'player').length,
-      eventCount: state.events.length,
-      npcCount: state.knownNPCs.length,
-    },
-    checks: {
-      hasNarrativeSummary: Boolean(state.narrativeSummary),
-      hasMailboxState: Boolean(state.mailbox),
-      unreadLetterCount: getUnreadLetterCount(state),
-      repeatedOpeningRisk: repeatedOpenings.length > 0,
-      repeatedOpenings: repeatedOpenings.slice(-5),
-    },
-    state,
-    messages,
-    latestSceneImage: sceneImage,
-  };
-}
-
 function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
   const match = text.match(/\[STATE\]([\s\S]*?)\[\/STATE\]/i);
   if (!match) return undefined;
@@ -288,7 +250,7 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
     }
     if (key === 'VISUAL') {
       const visual = value.toLowerCase();
-      if (visual === 'none' || visual === 'glitch' || visual === 'memory') {
+      if (visual === 'none' || visual === 'glitch' || visual === 'memory' || visual === 'ending') {
         update.visualCue = visual;
       }
     }
@@ -323,6 +285,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [imageLoading, setImageLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
   const [visualCue, setVisualCue] = useState<'glitch' | 'memory' | null>(null);
+  const [videoCue, setVideoCue] = useState<{ type: VideoEventType; url: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
@@ -487,9 +450,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const rawContent = fullContent;
       const cleanContent = cleanNarrative(rawContent);
       const narrativeState = parseNarrativeState(rawContent);
-      if (narrativeState?.visualCue === 'glitch' || narrativeState?.visualCue === 'memory') {
-        setVisualCue(narrativeState.visualCue);
-        window.setTimeout(() => setVisualCue(null), narrativeState.visualCue === 'memory' ? 2600 : 1400);
+      if (narrativeState?.visualCue === 'glitch' || narrativeState?.visualCue === 'memory' || narrativeState?.visualCue === 'ending') {
+        if (narrativeState.visualCue !== 'ending') {
+          setVisualCue(narrativeState.visualCue);
+          window.setTimeout(() => setVisualCue(null), narrativeState.visualCue === 'memory' ? 2600 : 1400);
+        }
+        prepareVideoCue(narrativeState.visualCue, updatedVideoPrompt(gameStateRef.current, cleanContent));
       }
 
       // 1. Scene image — prefer the AI's current-shot [SCENE:] tag every turn.
@@ -786,17 +752,80 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
-  function handleExportJourneyReport() {
-    const report = buildJourneyReport(gameStateRef.current, messagesRef.current, sceneImage);
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `letters-from-changan-report-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setShareStatus('试玩报告已导出');
-    window.setTimeout(() => setShareStatus(''), 1800);
+  function updatedVideoPrompt(state: PlayerState, content: string): string {
+    const role = ROLES[state.role]?.name || '旅人';
+    const excerpt = content.replace(/\s+/g, ' ').slice(0, 180);
+    return `Tang Dynasty Chang an cinematic narrative moment, ${state.location}, ${role}, ${excerpt}, warm amber light, aged silk texture, subtle time distortion, no text, no subtitles`;
+  }
+
+  async function pollVideoAsset(asset: VideoAsset) {
+    if (!asset.taskId) return;
+    try {
+      const res = await fetch(`/api/video?taskId=${encodeURIComponent(asset.taskId)}`);
+      const data = await res.json();
+      const status = String(data.status || '').toLowerCase();
+      if (data.url || status === 'succeeded' || status === 'completed' || status === 'success') {
+        const ready: VideoAsset = {
+          ...asset,
+          status: 'ready',
+          url: data.url || asset.url,
+          updatedAt: Date.now(),
+        };
+        saveVideoAsset(ready);
+        if (ready.url) setVideoCue({ type: ready.type, url: ready.url });
+      } else if (status === 'failed' || status === 'error') {
+        saveVideoAsset({ ...asset, status: 'failed', updatedAt: Date.now() });
+      }
+    } catch {
+      // Keep CSS visual cue fallback.
+    }
+  }
+
+  async function prepareVideoCue(type: VideoEventType, prompt: string) {
+    const gs = gameStateRef.current;
+    const key = makeVideoKey(type, gs.role, gs.location, gs.turnCount);
+    const cached = getVideoAsset(key);
+    if (cached?.status === 'ready' && cached.url) {
+      setVideoCue({ type, url: cached.url });
+      return;
+    }
+    if (cached?.status === 'queued') {
+      pollVideoAsset(cached);
+      return;
+    }
+    try {
+      const res = await fetch('/api/video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          width: 1152,
+          height: 768,
+          num_frames: type === 'glitch' ? 73 : 121,
+          frame_rate: 24,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || (!data.taskId && !data.url)) return;
+      const asset: VideoAsset = {
+        key,
+        type,
+        status: data.url ? 'ready' : 'queued',
+        prompt,
+        taskId: data.taskId,
+        url: data.url,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      saveVideoAsset(asset);
+      if (asset.url) {
+        setVideoCue({ type, url: asset.url });
+      } else {
+        window.setTimeout(() => pollVideoAsset(asset), 5000);
+      }
+    } catch {
+      // Keep CSS visual cue fallback.
+    }
   }
 
   // Generate scene image with caching. cacheKey identifies the location;
@@ -919,6 +948,26 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           {visualCue === 'memory' && <div className="absolute inset-10 border border-amber-200/10 bg-amber-100/5 blur-[1px]" />}
         </div>
       )}
+      {videoCue && (
+        <div className={`pointer-events-none absolute inset-0 z-30 overflow-hidden ${videoCue.type === 'glitch' ? 'mix-blend-screen' : ''}`}>
+          <video
+            src={videoCue.url}
+            autoPlay
+            muted
+            playsInline
+            className={`h-full w-full object-cover ${
+              videoCue.type === 'memory'
+                ? 'opacity-35'
+                : videoCue.type === 'ending'
+                  ? 'opacity-80'
+                  : 'opacity-45 saturate-150 contrast-125'
+            }`}
+            onEnded={() => setVideoCue(null)}
+            onError={() => setVideoCue(null)}
+          />
+          <div className="absolute inset-0 bg-stone-950/25" />
+        </div>
+      )}
       {imageLoading && !sceneImage && (
         <div className="absolute inset-x-0 top-4 z-30 text-center">
           <span className="text-amber-600/20 text-xs">场景浮现中...</span>
@@ -940,9 +989,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
         <div className="justify-self-end flex min-w-10 items-center justify-end">
-          <button onClick={handleExportJourneyReport} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="导出试玩报告">
-            ⬇
-          </button>
           <button onClick={handleShareCard} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="生成分享卡片">
             🕊️
           </button>

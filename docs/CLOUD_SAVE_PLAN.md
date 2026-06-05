@@ -28,6 +28,50 @@ type CloudJourney = {
 };
 ```
 
+## Supabase Table
+
+Create this table before enabling cloud sync:
+
+```sql
+create table if not exists public.journeys (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  role text not null,
+  state jsonb not null,
+  messages jsonb not null default '[]'::jsonb,
+  created_at bigint not null,
+  updated_at bigint not null,
+  schema_version int not null default 1
+);
+
+alter table public.journeys enable row level security;
+
+create policy "Users can read own journeys"
+  on public.journeys for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own journeys"
+  on public.journeys for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own journeys"
+  on public.journeys for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete own journeys"
+  on public.journeys for delete
+  using (auth.uid() = user_id);
+```
+
+Client env vars:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
 ## Sync Rules
 
 - Login does not erase local saves.
@@ -48,4 +92,3 @@ type CloudJourney = {
 - Payment entitlements.
 - Server-side narrative memory.
 - Social graph or public profiles.
-

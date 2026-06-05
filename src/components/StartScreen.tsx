@@ -1,9 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import { ChangeEvent, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { ROLES } from '@/lib/prompts';
 import { SaveSummary, exportSaves, importSaves } from '@/lib/gameState';
+import { canUseCloudSaves, getCloudUserEmail, sendCloudLoginLink, signOutCloud, syncCloudSaves } from '@/lib/cloudSaves';
 
 interface Props {
   onStart: (role: string) => void;
@@ -21,7 +22,16 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
   const hasSaves = saves.length > 0;
   const [showSavePicker, setShowSavePicker] = useState(false);
   const [saveNotice, setSaveNotice] = useState('');
+  const [cloudEmail, setCloudEmail] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [cloudBusy, setCloudBusy] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showSavePicker) {
+      refreshCloudUser();
+    }
+  }, [showSavePicker]);
 
   function handleExportSaves() {
     const blob = new Blob([exportSaves()], { type: 'application/json' });
@@ -48,6 +58,39 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
       event.target.value = '';
       window.setTimeout(() => setSaveNotice(''), 2200);
     }
+  }
+
+  async function refreshCloudUser() {
+    setCloudEmail(await getCloudUserEmail() || '');
+  }
+
+  async function handleCloudLogin() {
+    setCloudBusy(true);
+    const result = await sendCloudLoginLink(loginEmail);
+    setSaveNotice(result.message);
+    setCloudBusy(false);
+    window.setTimeout(() => setSaveNotice(''), 2600);
+  }
+
+  async function handleCloudSync() {
+    setCloudBusy(true);
+    const result = await syncCloudSaves();
+    if (result.ok) {
+      onSavesChanged();
+      await refreshCloudUser();
+    }
+    setSaveNotice(result.message);
+    setCloudBusy(false);
+    window.setTimeout(() => setSaveNotice(''), 2600);
+  }
+
+  async function handleCloudSignOut() {
+    setCloudBusy(true);
+    await signOutCloud();
+    setCloudEmail('');
+    setSaveNotice('已退出云存档');
+    setCloudBusy(false);
+    window.setTimeout(() => setSaveNotice(''), 2200);
   }
 
   return (
@@ -179,6 +222,38 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
                 </button>
               </div>
               <input ref={importInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportSaves} />
+              <div className="mt-3 border-t border-amber-800/10 pt-3">
+                {canUseCloudSaves() ? (
+                  cloudEmail ? (
+                    <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                      <div className="truncate text-xs text-amber-500/45">{cloudEmail}</div>
+                      <div className="flex gap-2">
+                        <button disabled={cloudBusy} onClick={handleCloudSync} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80 disabled:opacity-40">
+                          云同步
+                        </button>
+                        <button disabled={cloudBusy} onClick={handleCloudSignOut} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-500/45 hover:text-amber-300/70 disabled:opacity-40">
+                          退出
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input
+                        value={loginEmail}
+                        onChange={(event) => setLoginEmail(event.target.value)}
+                        onFocus={refreshCloudUser}
+                        placeholder="邮箱登录云存档"
+                        className="min-w-0 rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-200/80 placeholder:text-amber-600/30 focus:outline-none"
+                      />
+                      <button disabled={cloudBusy} onClick={handleCloudLogin} className="rounded-lg border border-amber-800/20 bg-stone-900/60 px-3 py-2 text-xs text-amber-400/60 hover:text-amber-300/80 disabled:opacity-40">
+                        发送链接
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <div className="text-center text-xs text-amber-900/35">云存档未配置，本机旅程会继续保存在浏览器中</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
