@@ -185,7 +185,9 @@ function buildLetterContinuationPrompt(state: PlayerState, mode: 'read' | 'reply
   return `（我收好林深的来信。请从当前位置"${location}"继续，不要重置剧情；让信里的一个具体细节自然影响我接下来观察长安的方式。最近这封信的大意是："${latestLinLetter || '林深写来了一封来自远方的信'}"。不要默认回客栈，不要凭空反复引入黑衣人。）`;
 }
 
-function getShareExcerpt(messages: ChatMessage[]): string {
+function getShareExcerpt(messages: ChatMessage[], activeLetter = ''): string {
+  const letter = activeLetter.replace(/\s+/g, ' ').trim();
+  if (letter.length >= 40) return letter;
   const candidates = [...messages]
     .reverse()
     .filter((message) => message.role === 'assistant')
@@ -654,7 +656,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   async function handleShareCard() {
-    const shareExcerpt = getShareExcerpt(messagesRef.current);
+    const shareExcerpt = getShareExcerpt(messagesRef.current, showLetter ? letterContent : '');
     if (!shareExcerpt) return;
 
     const canvas = document.createElement('canvas');
