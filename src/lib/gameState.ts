@@ -165,6 +165,21 @@ export function listSaveSummaries(): SaveSummary[] {
     }));
 }
 
+export function getCrossLineEchoes(currentRole: string): string[] {
+  if (typeof window === 'undefined') return [];
+  return loadSaves()
+    .filter((save) => save.role !== currentRole)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 3)
+    .map((save) => {
+      const state = normalizePlayerState(save.state);
+      const recentEvents = state.events.slice(-3).join("、") || "暂无事件";
+      const npcs = state.knownNPCs.slice(-3).join("、") || "无人";
+      const letterCount = state.letterHistory.filter((letter) => letter.from === "linShen").length;
+      return `${save.role}线曾到过${state.location}，牵连NPC：${npcs}；事件：${recentEvents}；林深来信${letterCount}封。`;
+    });
+}
+
 export function activateSave(id: string): PlayerState | null {
   const save = loadSaves().find((item) => item.id === id);
   if (!save) return null;

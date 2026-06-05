@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate } from '@/lib/gameState';
+import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
 import { PlayerState, ROLES } from '@/lib/prompts';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
@@ -360,6 +360,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setIsStreaming(true);
 
     const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: Date.now() };
+    const playerStateForApi = { ...gs, crossLineEchoes: getCrossLineEchoes(gs.role) };
     const apiMessages = newMessages
       .filter(m => m.role !== 'system')
       .slice(-20)
@@ -369,7 +370,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, playerState: gs }),
+        body: JSON.stringify({ messages: apiMessages, playerState: playerStateForApi }),
       });
 
       const reader = res.body?.getReader();
@@ -536,10 +537,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     try {
       const gs = gameStateRef.current;
       const currentHistory = gs.letterHistory || [];
+      const playerStateForApi = { ...gs, crossLineEchoes: getCrossLineEchoes(gs.role) };
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerReply: null, letterHistory: currentHistory, playerState: gs }),
+        body: JSON.stringify({ playerReply: null, letterHistory: currentHistory, playerState: playerStateForApi }),
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`Letter request failed: ${res.status}`);

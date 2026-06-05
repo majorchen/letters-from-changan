@@ -128,6 +128,7 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
 - 事件版本：${formatEventVersions(playerState.eventVersions)}
 - 叙事摘要：${playerState.narrativeSummary || "暂无"}
 - NPC记忆：${formatNpcMemories(playerState.npcMemories)}
+- 跨线回声：${formatCrossLineEchoes(playerState.crossLineEchoes)}
 - 自由输入次数：${playerState.freeInputCount || 0}/3
 - 邮箱状态：${mailbox.discovered ? (mailbox.unread.length > 0 || mailbox.pendingFirstOpen ? "有未读信件（发光中）" : "安静") : "未发现"}
 - 游戏阶段：${playerState.chapter}
@@ -159,7 +160,10 @@ ${sliceOfLifeGuide}
 
 ## 矛盾记录
 当林深、NPC或环境对同一件事给出不同说法时，不要急着纠正或解释。把不同说法写入 EVENT_VERSION，让矛盾成为可追踪线索。
-如果玩家选择"追问「某事件」的不同说法"，必须围绕事件版本里已有的来源回应，让NPC或环境对矛盾产生反应；不要用新事件岔开，也不要直接给最终答案。`;
+如果玩家选择"追问「某事件」的不同说法"，必须围绕事件版本里已有的来源回应，让NPC或环境对矛盾产生反应；不要用新事件岔开，也不要直接给最终答案。
+
+## 跨线呼应
+跨线回声只能轻轻出现：NPC提到"前阵子有个商人/书生/乐师/游侠"，或林深说自己似乎也在给另一个人写信。不要破坏当前单线体验，不要要求玩家必须知道其他存档。`;
 }
 
 function getSliceOfLifeGuide(state: PlayerState): string {
@@ -411,6 +415,7 @@ export interface PlayerState {
   narrativeSummary: string;
   npcMemories: Record<string, NpcMemory>;
   eventVersions: Record<string, Record<string, string>>;
+  crossLineEchoes?: string[];
   storyTime: StoryTime;
   storyPhase: StoryPhase;
   awaitingFreeInput: boolean;
@@ -507,6 +512,11 @@ function formatCausalEchoes(state: PlayerState): string {
     echoes.push("已有矛盾版本时，优先让玩家能调查、核对或被NPC试探，不要把矛盾当作错误抹平。");
   }
   return echoes.length > 0 ? echoes.join("\n") : "暂无明确回响。";
+}
+
+function formatCrossLineEchoes(echoes?: string[]): string {
+  if (!echoes || echoes.length === 0) return "暂无";
+  return echoes.slice(0, 4).join("\n");
 }
 
 function formatAnchorFragments(state: PlayerState): string {
