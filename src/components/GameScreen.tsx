@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
 import { PlayerState, ROLES } from '@/lib/prompts';
 import { getVideoAsset, makeVideoKey, saveVideoAsset, VideoAsset, VideoEventType } from '@/lib/videoCache';
+import { getCloudUserEmail } from '@/lib/cloudSaves';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
 import Prologue from './Prologue';
@@ -41,8 +42,9 @@ const LOCATION_KEYWORDS = [
   { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an at dusk, narrow alleys between courtyard houses, children playing, the smell of cooking, warm lanterns being lit' },
 ];
 
-const GAME_URL = 'https://letters-from-changan.vercel.app';
+const GAME_URL = 'https://letterstang.aifisher.cn';
 const REPLY_LETTER_COOLDOWN_TURNS = 28;
+const GUEST_FIRST_LETTER_TOAST_KEY = 'letters-from-changan-guest-first-letter-toast-v1';
 
 // Strip all tags and option lines from displayed narrative text.
 // Handles unclosed [SCENE: during streaming, and removes 【选项X】 lines.
@@ -285,7 +287,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [imageLoading, setImageLoading] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
   const [visualCue, setVisualCue] = useState<'glitch' | 'memory' | null>(null);
-  const [videoCue, setVideoCue] = useState<{ type: VideoEventType; url: string } | null>(null);
+  const [videoCue, setVideoCue] = useState<{ type: VideoEventType; urls: string[]; index: number } | null>(null);
+  const [videoStatus, setVideoStatus] = useState('');
+  const [saveToast, setSaveToast] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
@@ -608,6 +612,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       gameStateRef.current = updated;
       onStateChange(updated);
       saveGameState(updated);
+      if (currentHistory.filter((letter) => letter.from === 'linShen').length === 0) {
+        showGuestFirstLetterToast();
+      }
     } catch (err) {
       console.error(err);
       setLetterContent('（信封没有完全打开。也许风从窗缝里吹乱了字迹，请稍后再试。）');
@@ -615,6 +622,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       window.clearTimeout(timeoutId);
       setLetterLoading(false);
     }
+  }
+
+  async function showGuestFirstLetterToast() {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem(GUEST_FIRST_LETTER_TOAST_KEY)) return;
+    const email = await getCloudUserEmail();
+    if (email) return;
+    localStorage.setItem(GUEST_FIRST_LETTER_TOAST_KEY, 'shown');
+    setSaveToast('旅程已保存 · 登录可跨设备继续');
+    window.setTimeout(() => setSaveToast(''), 3000);
   }
 
   async function handleReply(reply: string) {
@@ -684,49 +701,104 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#1c1917');
-    gradient.addColorStop(0.55, '#292524');
-    gradient.addColorStop(1, '#451a03');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Background: bg-changan.webp + dark overlay
+    await new Promise<void>((resolve) => {
+      const bgImg = new window.Image();
+      bgImg.crossOrigin = 'anonymous';
+      bgImg.onload = () => {
+        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+        const ov = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        ov.addColorStop(0, 'rgba(28,25,23,0.82)');
+        ov.addColorStop(0.5, 'rgba(28,25,23,0.88)');
+        ov.addColorStop(1, 'rgba(28,25,23,0.93)');
+        ctx.fillStyle = ov;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        resolve();
+      };
+      bgImg.onerror = () => {
+        const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        g.addColorStop(0, '#1c1917'); g.addColorStop(0.55, '#292524'); g.addColorStop(1, '#451a03');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        resolve();
+      };
+      bgImg.src = '/bg-changan.webp';
+    });
 
-    ctx.fillStyle = 'rgba(245, 158, 11, 0.08)';
-    for (let i = 0; i < 140; i++) {
-      ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
-    }
+    // Subtle particles
+    ctx.fillStyle = 'rgba(245,158,11,0.06)';
+    for (let i = 0; i < 100; i++) ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
 
+    let curY = 80;
+
+    // App icon (rounded square)
+    await new Promise<void>((resolve) => {
+      const icon = new window.Image();
+      icon.crossOrigin = 'anonymous';
+      icon.onload = () => {
+        const s = 56, ix = 96, iy = curY, r = 12;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(ix, iy, s, s, r);
+        ctx.clip();
+        ctx.drawImage(icon, ix, iy, s, s);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(251,191,36,0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(ix, iy, s, s, r);
+        ctx.stroke();
+        resolve();
+      };
+      icon.onerror = () => resolve();
+      icon.src = '/favicon-192.png';
+    });
+
+    // Title next to icon
     ctx.fillStyle = '#fcd34d';
-    ctx.font = '700 56px serif';
-    ctx.fillText('来信长安', 96, 150);
-    ctx.fillStyle = 'rgba(251, 191, 36, 0.58)';
-    ctx.font = '28px serif';
-    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, 96, 205);
+    ctx.font = '700 52px serif';
+    ctx.fillText('来信长安', 168, curY + 40);
+    ctx.fillStyle = 'rgba(251,191,36,0.50)';
+    ctx.font = '22px serif';
+    ctx.fillText("Letters from Chang'an", 168, curY + 72);
+    curY += 120;
 
-    ctx.fillStyle = 'rgba(254, 243, 199, 0.78)';
-    ctx.font = '38px serif';
-    wrapCanvasText(ctx, shareExcerpt.slice(0, 260), 96, 360, 888, 62, 10);
+    // Hook line
+    ctx.fillStyle = 'rgba(252,211,77,0.85)';
+    ctx.font = '700 36px serif';
+    ctx.fillText('你在唐朝收到了', 96, curY);
+    ctx.fillText('一封来自2077年的信', 96, curY + 52);
+    curY += 130;
 
+    // Role / location
+    ctx.fillStyle = 'rgba(251,191,36,0.50)';
+    ctx.font = '26px serif';
+    ctx.fillText(`天宝元年 · ${roleInfo?.name || '旅人'} · ${gameState.location}`, 96, curY);
+    curY += 60;
+
+    // Narrative excerpt
+    ctx.fillStyle = 'rgba(254,243,199,0.78)';
+    ctx.font = '36px serif';
+    wrapCanvasText(ctx, shareExcerpt.slice(0, 320), 96, curY, 888, 58, 10);
+
+    // QR code
     const qrCanvas = document.createElement('canvas');
     await QRCode.toCanvas(qrCanvas, GAME_URL, {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 190,
-      color: {
-        dark: '#1c1917',
-        light: '#fef3c7',
-      },
+      color: { dark: '#1c1917', light: '#fef3c7' },
     });
-    ctx.fillStyle = 'rgba(254, 243, 199, 0.92)';
+    ctx.fillStyle = 'rgba(254,243,199,0.92)';
     ctx.fillRect(96, 1170, 218, 218);
     ctx.drawImage(qrCanvas, 110, 1184, 190, 190);
 
-    ctx.fillStyle = 'rgba(251, 191, 36, 0.44)';
+    ctx.fillStyle = 'rgba(251,191,36,0.50)';
     ctx.font = '26px serif';
-    ctx.fillText(GAME_URL.replace('https://', ''), 340, 1255);
-    ctx.fillStyle = 'rgba(254, 243, 199, 0.58)';
+    ctx.fillText(GAME_URL.replace('https://', ''), 340, 1250);
+    ctx.fillStyle = 'rgba(254,243,199,0.50)';
     ctx.font = '24px serif';
-    ctx.fillText('扫码进入这座长安', 340, 1300);
+    ctx.fillText('AI互动叙事 · 每次都是唯一的故事', 340, 1295);
 
     const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) return;
@@ -758,10 +830,39 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     return `Tang Dynasty Chang an cinematic narrative moment, ${state.location}, ${role}, ${excerpt}, warm amber light, aged silk texture, subtle time distortion, no text, no subtitles`;
   }
 
-  async function pollVideoAsset(asset: VideoAsset) {
-    if (!asset.taskId) return;
+  function endingSegmentPrompt(basePrompt: string, segmentIndex: number): string {
+    const beats = [
+      'opening shot, the current Tang Dynasty scene becomes still as if time is holding its breath',
+      'middle shot, the ceramic mailbox glows and thin 2077 light leaks into Chang an dust',
+      'memory shot, fragments of letters and faces cross the screen like reflected silk',
+      'closing shot, quiet fade toward black, unresolved tenderness, no text, no subtitles',
+    ];
+    return `${basePrompt}, ending sequence segment ${segmentIndex + 1}, ${beats[segmentIndex] || beats[0]}`;
+  }
+
+  function playVideoUrls(type: VideoEventType, urls: string[]) {
+    if (urls.length > 0) setVideoCue({ type, urls, index: 0 });
+  }
+
+  function finishVideoPlayback() {
+    setVideoCue((current) => {
+      if (!current) return null;
+      const nextIndex = current.index + 1;
+      if (nextIndex >= current.urls.length) return null;
+      return { ...current, index: nextIndex };
+    });
+  }
+
+  async function pollVideoAsset(asset: VideoAsset, attempt = 1): Promise<VideoAsset | null> {
+    if (!asset.taskId) return null;
     try {
-      const res = await fetch(`/api/video?taskId=${encodeURIComponent(asset.taskId)}`);
+      const params = new URLSearchParams({
+        taskId: asset.taskId,
+        key: asset.key,
+        type: asset.type,
+        prompt: asset.prompt,
+      });
+      const res = await fetch(`/api/video?${params.toString()}`);
       const data = await res.json();
       const status = String(data.status || '').toLowerCase();
       if (data.url || status === 'succeeded' || status === 'completed' || status === 'success') {
@@ -769,62 +870,83 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           ...asset,
           status: 'ready',
           url: data.url || asset.url,
+          urls: data.url ? [data.url] : asset.urls,
           updatedAt: Date.now(),
         };
         saveVideoAsset(ready);
-        if (ready.url) setVideoCue({ type: ready.type, url: ready.url });
+        return ready;
       } else if (status === 'failed' || status === 'error') {
         saveVideoAsset({ ...asset, status: 'failed', updatedAt: Date.now() });
+        return null;
+      } else if (attempt < 6) {
+        window.setTimeout(() => pollVideoAsset(asset, attempt + 1), 6000);
       }
     } catch {
       // Keep CSS visual cue fallback.
     }
+    return null;
+  }
+
+  async function prepareVideoSegment(type: VideoEventType, prompt: string, key: string, segmentIndex: number): Promise<VideoAsset | null> {
+    const cached = getVideoAsset(key);
+    if (cached?.status === 'ready' && (cached.url || cached.urls?.[0])) return cached;
+    if (cached?.status === 'queued') return pollVideoAsset(cached);
+
+    const res = await fetch('/api/video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key,
+        type,
+        segmentIndex,
+        prompt,
+        width: 1152,
+        height: 768,
+        num_frames: type === 'glitch' ? 73 : 121,
+        frame_rate: 24,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || (!data.taskId && !data.url)) return null;
+    const asset: VideoAsset = {
+      key,
+      type,
+      status: data.url ? 'ready' : 'queued',
+      prompt,
+      taskId: data.taskId,
+      url: data.url,
+      urls: data.url ? [data.url] : undefined,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    saveVideoAsset(asset);
+    return asset.status === 'ready' ? asset : pollVideoAsset(asset);
   }
 
   async function prepareVideoCue(type: VideoEventType, prompt: string) {
     const gs = gameStateRef.current;
-    const key = makeVideoKey(type, gs.role, gs.location, gs.turnCount);
-    const cached = getVideoAsset(key);
-    if (cached?.status === 'ready' && cached.url) {
-      setVideoCue({ type, url: cached.url });
-      return;
-    }
-    if (cached?.status === 'queued') {
-      pollVideoAsset(cached);
-      return;
-    }
+    const baseKey = makeVideoKey(type, gs.role, gs.location, gs.turnCount);
+    const segmentCount = type === 'ending' ? 4 : 1;
+    setVideoStatus(type === 'ending' ? '结局影像生成中...' : '记忆影像生成中...');
     try {
-      const res = await fetch('/api/video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          width: 1152,
-          height: 768,
-          num_frames: type === 'glitch' ? 73 : 121,
-          frame_rate: 24,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || (!data.taskId && !data.url)) return;
-      const asset: VideoAsset = {
-        key,
-        type,
-        status: data.url ? 'ready' : 'queued',
-        prompt,
-        taskId: data.taskId,
-        url: data.url,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      saveVideoAsset(asset);
-      if (asset.url) {
-        setVideoCue({ type, url: asset.url });
+      const readyAssets = await Promise.all(Array.from({ length: segmentCount }, (_, index) => {
+        const key = segmentCount === 1 ? baseKey : `${baseKey}:segment-${index + 1}`;
+        const segmentPrompt = segmentCount === 1 ? prompt : endingSegmentPrompt(prompt, index);
+        return prepareVideoSegment(type, segmentPrompt, key, index);
+      }));
+      const urls = readyAssets
+        .map((asset) => asset?.url || asset?.urls?.[0] || '')
+        .filter(Boolean);
+      if (urls.length === segmentCount) {
+        playVideoUrls(type, urls);
+        setVideoStatus('');
       } else {
-        window.setTimeout(() => pollVideoAsset(asset), 5000);
+        setVideoStatus('影像已排队，生成完成后会自动缓存');
+        window.setTimeout(() => setVideoStatus(''), 2600);
       }
     } catch {
       // Keep CSS visual cue fallback.
+      setVideoStatus('');
     }
   }
 
@@ -951,7 +1073,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       {videoCue && (
         <div className={`pointer-events-none absolute inset-0 z-30 overflow-hidden ${videoCue.type === 'glitch' ? 'mix-blend-screen' : ''}`}>
           <video
-            src={videoCue.url}
+            key={`${videoCue.type}-${videoCue.index}-${videoCue.urls[videoCue.index]}`}
+            src={videoCue.urls[videoCue.index]}
             autoPlay
             muted
             playsInline
@@ -962,10 +1085,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
                   ? 'opacity-80'
                   : 'opacity-45 saturate-150 contrast-125'
             }`}
-            onEnded={() => setVideoCue(null)}
+            onEnded={finishVideoPlayback}
             onError={() => setVideoCue(null)}
           />
           <div className="absolute inset-0 bg-stone-950/25" />
+        </div>
+      )}
+      {videoStatus && (
+        <div className="absolute inset-x-0 top-4 z-30 text-center">
+          <span className="rounded-full border border-cyan-300/10 bg-stone-950/55 px-3 py-1 text-xs text-cyan-100/45">{videoStatus}</span>
+        </div>
+      )}
+      {saveToast && (
+        <div className="absolute inset-x-0 top-4 z-30 text-center">
+          <span className="rounded-full border border-amber-500/15 bg-stone-950/70 px-3 py-1 text-xs text-amber-200/70">{saveToast}</span>
         </div>
       )}
       {imageLoading && !sceneImage && (
