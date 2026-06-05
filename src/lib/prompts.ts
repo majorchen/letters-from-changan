@@ -118,6 +118,7 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
   const sliceOfLifeGuide = getSliceOfLifeGuide(playerState);
   const causalEchoes = formatCausalEchoes(playerState);
   const worldEvents = formatWorldEvents(playerState);
+  const convergenceGuide = formatRoleConvergence(playerState);
   return `${WORLD_SETTING}
 
 ## 当前玩家信息
@@ -148,6 +149,9 @@ ${causalEchoes}
 
 ## 世界事件库候选
 ${worldEvents}
+
+## 本线收束目标
+${convergenceGuide}
 
 ## 当前场景指引
 ${getChapterGuide(playerState)}
@@ -271,6 +275,12 @@ export interface WorldEvent {
   roles?: string[];
   scene: string;
   detail: string;
+}
+
+interface RoleConvergence {
+  fragment: string;
+  ahaMoment: string;
+  finalQuestion: string;
 }
 
 const ANCHOR_FRAGMENTS: AnchorFragment[] = [
@@ -414,6 +424,29 @@ const WORLD_EVENTS: WorldEvent[] = [
   { code: "world_grain_measure_change", phase: "act3", scene: "米斗变浅", detail: "米铺的斗看起来没变，装出来却少了一把，伙计说这些日子大家都这么卖。" },
   { code: "world_silent_post_station", phase: "act3", scene: "驿站沉默", detail: "驿站门口拴着汗透的马，驿卒们谁也不说话，只把军报一层层往里递。" },
 ];
+
+const ROLE_CONVERGENCE: Record<string, RoleConvergence> = {
+  merchant: {
+    fragment: "2077 的经济并不是单纯贫穷，而是信用、供应链和自动化配给同时崩塌；林深习惯用价格、债务、旧市场遗址来理解世界。",
+    ahaMoment: "玩家发现长安账本里的异常价格不是普通生意问题，而是未来供应链崩塌在过去留下的回声。",
+    finalQuestion: "如果每一次交易都会在未来变成债务，玩家还愿不愿意相信一纸契约？",
+  },
+  scholar: {
+    fragment: "2077 的文化断层来自模型重写与摘要替代原文；很多典籍只剩被加工过的版本，林深分不清原文和重构文本。",
+    ahaMoment: "玩家意识到自己怀里的策论、书坊抄本和林深记忆里的版本互相污染，文字本身已经成为时空裂缝。",
+    finalQuestion: "如果记下来的文字都会被改写，玩家要把真相交给纸、交给人，还是交给记忆？",
+  },
+  wanderer: {
+    fragment: "2077 并不和平，城市安全由算法、身份识别和私人武装共同维持；林深害怕被追踪不是幻想。",
+    ahaMoment: "玩家发现自己刀上的缺口、暗榜和未来监控叙述指向同一件事：有人跨时代标记了他。",
+    finalQuestion: "当被追踪的人可能也是追踪者，玩家该保护谁，又该怀疑谁？",
+  },
+  musician: {
+    fragment: "2077 的创作被自动生成淹没，真人演奏变成稀有甚至危险的怀旧行为；林深怀念的不是音乐，而是有人真的在场。",
+    ahaMoment: "玩家听出阿依旋律、自己的琵琶声和林深描述的未来广告铃声其实是同一个动机的三种版本。",
+    finalQuestion: "如果未来只剩完美复制的声音，玩家此刻弹错的一个音还算不算更真实？",
+  },
+};
 
 export interface PlayerState {
   role: string;
@@ -560,6 +593,25 @@ function formatWorldEvents(state: PlayerState): string {
   return candidates
     .map((event) => `- ${event.code}：${event.scene}。${event.detail} 如果本轮采用，必须把 ${event.code} 写入 [STATE] EVENTS。`)
     .join("\n");
+}
+
+function formatRoleConvergence(state: PlayerState): string {
+  const guide = ROLE_CONVERGENCE[state.role];
+  if (!guide) return "暂无。";
+  const phase = getStoryPhase(state).phase;
+  const lines = [
+    `本线 2077 碎片：${guide.fragment}`,
+    `本线啊哈时刻：${guide.ahaMoment}`,
+  ];
+  if (phase === "act1") {
+    lines.push("第一幕只允许埋日常异常，不要解释上述碎片。");
+  } else if (phase === "act2") {
+    lines.push("第二幕可以让玩家开始把两个以上线索联系起来，但仍不要给最终答案。");
+  } else {
+    lines.push(`第三幕要把本线问题推向选择：${guide.finalQuestion}`);
+  }
+  lines.push("如果本轮触发关键认知翻转，必须把一个清晰事件代码写入 [STATE] EVENTS。");
+  return lines.join("\n");
 }
 
 export function advanceStoryTime(state: Partial<PlayerState>): StoryTime {

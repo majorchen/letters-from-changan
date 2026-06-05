@@ -10,7 +10,8 @@
     "smoke:chat": "node scripts/smoke-chat.mjs",
     "smoke:letter": "node scripts/smoke-letter.mjs",
     "playtest:longrun": "node scripts/playtest-longrun.mjs",
-    "roadmap:audit": "node scripts/roadmap-audit.mjs"
+    "roadmap:audit": "node scripts/roadmap-audit.mjs",
+    "mechanics:audit": "node scripts/mechanics-audit.mjs"
   },
   "dependencies": {
     "next": "16.2.7",

@@ -23,6 +23,7 @@ AI 驱动的盛唐长安跨时空书信叙事游戏。
 - Agnes API
   - `agnes-2.0-flash`：叙事与书信
   - `agnes-image-2.0-flash`：场景图
+  - `agnes-video-v2.0`：视频事件基础封装
 - Vercel 自动部署
 - `localStorage` 本地存档
 
@@ -45,7 +46,13 @@ AGNES_API_URL=...
 ```bash
 npm run lint
 npm run build
+npm run mechanics:audit
+npm run roadmap:audit
+npm run smoke:chat
+npm run smoke:letter
 ```
+
+`smoke:*` 脚本默认需要一个可访问的本地或线上服务，可通过 `SMOKE_BASE_URL` 指定。
 
 ## 路线图
 
@@ -54,3 +61,9 @@ npm run build
 - Barlow Phase 1：植入不可靠信息、跨时空矛盾与早期悬念钩子。
 - NPC 记忆与因果链：让玩家回信和对话选择影响长安世界。
 - 云存档与账号体系：支持跨设备继续旅程。
+
+## 设计与后续计划
+
+- [docs/PLAYTEST_ACCEPTANCE.md](docs/PLAYTEST_ACCEPTANCE.md)：长线试玩、啊哈时刻和人工反馈的验收标准。
+- [docs/CLOUD_SAVE_PLAN.md](docs/CLOUD_SAVE_PLAN.md)：账号与云存档接入方案。
+- [docs/VIDEO_PIPELINE_PLAN.md](docs/VIDEO_PIPELINE_PLAN.md)：Agnes video、缓存与结局视频管线。
