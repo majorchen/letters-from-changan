@@ -330,21 +330,38 @@ export function loadChatHistory(): ChatMessage[] {
   return [];
 }
 
+const MAX_SCENE_IMAGES = 3;
+
+function trimSceneImages(messages: ChatMessage[]): ChatMessage[] {
+  let sceneCount = 0;
+  const result = [...messages];
+  for (let i = result.length - 1; i >= 0; i--) {
+    if (result[i].sceneImage) {
+      sceneCount++;
+      if (sceneCount > MAX_SCENE_IMAGES) {
+        result[i] = { ...result[i], sceneImage: undefined };
+      }
+    }
+  }
+  return result;
+}
+
 export function saveChatHistory(messages: ChatMessage[]): void {
   if (typeof window === 'undefined') return;
   clearLegacyStorage();
+  const trimmed = trimSceneImages(messages);
   const saves = loadSaves();
   const activeId = getActiveSaveId();
   const index = saves.findIndex((save) => save.id === activeId);
   if (index >= 0) {
     saves[index] = {
       ...saves[index],
-      messages,
+      messages: trimmed,
       updatedAt: Date.now(),
     };
     saveSaves(saves);
   }
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(messages));
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
 }
 
 export function clearGame(): void {
