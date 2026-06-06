@@ -257,6 +257,51 @@ function isLetterRelatedOption(option: string): boolean {
   return /(信件|信笺|邮箱|信匣|查看信|读信|展开信|取出.*信|打开.*信|打开邮|展开.*笺)/.test(option);
 }
 
+function sanitizeResponse(raw: string, state: PlayerState): string {
+  let content = raw;
+  content = content.replace(/信上写着[：:][\s\S]*/g, '');
+  content = content.replace(/信中说[：:][\s\S]*/g, '');
+  content = content.replace(/林深写道[：:][\s\S]*/g, '');
+  content = content.replace(/信里写[：:][\s\S]*/g, '');
+  const mailboxOverflow = content.match(/(金色光[芒辉]|金光涌出)[，。]/);
+  if (mailboxOverflow && mailboxOverflow.index !== undefined) {
+    const cutAt = mailboxOverflow.index + mailboxOverflow[0].length;
+    const afterCut = content.slice(cutAt);
+    const periodIdx = afterCut.indexOf('。');
+    if (periodIdx >= 0) {
+      content = content.slice(0, cutAt + periodIdx + 1);
+    }
+  }
+  if ([...content].length > 500) {
+    const truncated = [...content].slice(0, 500).join('');
+    const lastPeriod = Math.max(truncated.lastIndexOf('。'), truncated.lastIndexOf('」'));
+    if (lastPeriod > 200) content = truncated.slice(0, lastPeriod + 1);
+  }
+  void state;
+  return content;
+}
+
+function sanitizeOptions(options: string[], messages: ChatMessage[]): string[] {
+  const GENERIC_BLACKLIST = /^(观察细节|仔细查看|换个角度试探|打听消息|继续观察|四处看看)$/;
+  let filtered = options.filter(opt => !GENERIC_BLACKLIST.test(opt));
+  filtered = filtered.filter(opt => !isLetterRelatedOption(opt));
+  void messages;
+  return filtered.length > 0 ? filtered : options.slice(0, 1);
+}
+
+function sanitizeState(parsed: NarrativeStateUpdate, playerState: PlayerState): NarrativeStateUpdate {
+  if (parsed.visualCue === 'ending' && (playerState.storyPhase || 'act1') !== 'act3') {
+    parsed.visualCue = 'none';
+  }
+  if (parsed.visualCue === 'glitch' || parsed.visualCue === 'memory') {
+    parsed.visualCue = 'none';
+  }
+  if (parsed.inputMode === 'free' && (playerState.freeInputCount || 0) >= 3) {
+    parsed.inputMode = 'options';
+  }
+  return parsed;
+}
+
 function fallbackSceneFromNarrative(state: PlayerState, content: string): string {
   const role = ROLES[state.role]?.name || '旅人';
   const excerpt = content.replace(/\s+/g, ' ').slice(0, 180);
@@ -630,8 +675,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // === Extract everything from RAW content, display CLEANED content ===
       const rawContent = fullContent;
-      const cleanContent = cleanNarrative(rawContent);
+      const cleanContent = sanitizeResponse(cleanNarrative(rawContent), gs);
       const narrativeState = parseNarrativeState(rawContent);
+      if (narrativeState) sanitizeState(narrativeState, gs);
       if (narrativeState?.visualCue === 'ending' && !ending) {
         void prepareEnding();
       }
@@ -699,7 +745,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       }
 
       // 4. Options (from raw) — stored on the message for persistence
-      const extractedOptions = extractOptions(rawContent);
+      const extractedOptions = sanitizeOptions(extractOptions(rawContent), msgs);
       const contextualFallback = fallbackOptions(updated, rawContent, text);
       const modelOptions = dedupeOptions(extractedOptions, msgs);
       const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
