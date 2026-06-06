@@ -78,14 +78,41 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
 - 返回字段 `videoPrompt` → `imagePrompt`
 - 图片 prompt 使用游戏同款风格，内容描述2077场景，格式：
 
+**方案**：让 AI 在生成信件时同时输出镜头描述，而不是代码硬匹配关键词。与 Phase 3 场景图的 SCENE 标签同等要求。
+
+**letter API prompt 追加指令**（在请求信件时附加）：
+```
+写完信件正文后，另起一行输出配图标记：
+[LETTER_SCENE:shot type(close-up/medium/wide) + camera angle + Lin Shen's specific action and facial expression matching this letter's emotional tone + gaze direction(NOT looking at camera) + 2077 environment detail + lighting. 60 words max, English]
+例如：[LETTER_SCENE:Close-up, low angle. Lin Shen sits on a rooftop edge at dusk, knees drawn up, chin resting on folded arms, eyes distant and glassy with unshed tears, gazing at a horizon of holographic billboards. Cold blue city glow below, warm orange sunset above, wind pulling at his collar]
+```
+
+**letter route 解析**（`src/app/api/letter/route.ts`）：
 ```typescript
-function buildLetterImagePrompt(content: string, letterNumber: number): string {
-  const excerpt = content.replace(/\s+/g, ' ').slice(0, 300);
-  return `${IMAGE_STYLE_PREFIX} Medium shot, a scene from the year 2077 implied by this letter (number ${letterNumber}): ${excerpt}. Near-future Chinese city, restrained believable technology, traces of loneliness and human habitation. Character continuity: 林深: A slim Chinese man in his early thirties from 2077, pale tired face, short slightly untidy black hair, dark reflective eyes, plain graphite-grey future jacket with subtle worn seams. ${IMAGE_CONSTRAINT_SUFFIX}`;
+// 从 AI 响应中提取信件内容和镜头描述
+const sceneMatch = rawContent.match(/\[LETTER_SCENE:([^\]]+)\]/i);
+const letterContent = rawContent.replace(/\[LETTER_SCENE:[^\]]+\]/i, '').trim();
+const sceneDesc = sceneMatch?.[1]?.trim() || fallbackLetterScene(letterNumber);
+
+// 拼接完整图片 prompt（风格前缀 + AI镜头 + 人物档案 + 约束后缀）
+const imagePrompt = `${IMAGE_STYLE_PREFIX} ${sceneDesc}. Near-future Chinese city, restrained believable technology. Character continuity: 林深: A slim Chinese man in his early thirties from 2077, pale tired face, short slightly untidy black hair, dark reflective eyes, plain graphite-grey future jacket with subtle worn seams. ${IMAGE_CONSTRAINT_SUFFIX}`;
+
+return Response.json({ content: letterContent, imagePrompt });
+```
+
+**fallback**（AI 未输出 LETTER_SCENE 时的兜底）：
+```typescript
+function fallbackLetterScene(letterNumber: number): string {
+  const scenes = [
+    'Medium shot, slightly high angle. Lin Shen sits alone at a translucent desk, one hand hovering over a glowing ceramic mailbox, head bowed, eyes soft with hesitation. Dim apartment, holographic city lights through rain-streaked window',
+    'Wide shot, eye-level. Lin Shen stands by a floor-to-ceiling window, back half-turned, one palm pressed against the glass, watching neon reflections ripple in the rain below. Empty apartment behind him, single warm lamp',
+    'Close-up, low angle. Lin Shen crouches beside the ceramic mailbox on a cluttered desk, fingers tracing its rim, brows furrowed with concentration, lips slightly parted. Soft golden glow from the mailbox illuminates his face from below',
+  ];
+  return scenes[(letterNumber - 1) % scenes.length];
 }
 ```
 
-其中 `IMAGE_STYLE_PREFIX` 和 `IMAGE_CONSTRAINT_SUFFIX` 从 prompts.ts import（见 Task 3.2）。
+**核心原则**：信件配图和场景图使用完全相同的 `IMAGE_STYLE_PREFIX` + `IMAGE_CONSTRAINT_SUFFIX`（见 Task 3.2），确保风格一致。镜头描述由 AI 根据每封信的情绪动态生成（景别、角度、表情、目光、动作、环境），不靠代码硬匹配。
 
 ---
 

@@ -133,60 +133,13 @@ function isGenericOption(option: string): boolean {
   return /^(继续观察|仔细查看|换个角度试探一句|打听消息|看看周围|静观其变|等待变化|记下来|离开这里)$/.test(option.trim());
 }
 
-function findContextSubjects(state: PlayerState, content: string): { npc: string; place: string; clue: string } {
-  const npc = [...(state.knownNPCs || [])]
-    .reverse()
-    .find((name) => content.includes(name)) || [...(state.knownNPCs || [])].reverse()[0] || '身边的人';
-  const place = LOCATION_KEYWORDS.find((item) => content.includes(item.keyword))?.keyword || state.location || '眼前';
-  const quoted = content.match(/[“「『](.{2,18}?)[”」』]/)?.[1];
-  const clue = quoted || content.match(/(?:账本|陶器|脚印|纸条|灯影|琴声|香气|刀痕|地图|货物|信匣|坊门|马车|酒盏)/)?.[0] || '刚才的异样';
-  return { npc, place, clue };
-}
-
 function fallbackOptions(state: PlayerState, content: string, playerInput = ''): string[] {
-  const context = `${playerInput}\n${content}`;
   const contradictionOption = getContradictionOption(state);
-  const { npc, place, clue } = findContextSubjects(state, context);
-  const variant = (state.turnCount || 0) % 3;
+  const context = `${playerInput}\n${content}`;
   if (state.chapter === 'arrival' && /(客栈|客房|房间|投宿|安顿|住下|王掌柜)/.test(context)) {
-    return [
-      '请王掌柜安排一间客房',
-      '先把行李放进房里',
-    ];
+    return ['请王掌柜安排一间客房', '先把行李放进房里'];
   }
-
-  if (/(问|询问|追问|打听|告诉|解释|为什么|怎么|何人|是谁|哪里|何处)/.test(playerInput)) {
-    const sets = [
-      [`请${npc}说清「${clue}」`, `拿${place}的见闻与他核对`, `故意略去一处看${npc}反应`],
-      [`问${npc}何时知道此事`, `追查「${clue}」最早的来源`, `把刚才的话反说一遍试他`],
-      [`让${npc}指出话里的证据`, `去${place}找第二个知情人`, `暂不表态，记下他的原话`],
-    ];
-    return withContradictionOption(sets[variant].slice(0, 2), contradictionOption);
-  }
-  if (/(看|观察|检查|查看|摸|靠近|打开|寻找|翻|搜)/.test(playerInput)) {
-    const sets = [
-      [`检查${clue}留下的痕迹`, `请${npc}辨认这处异样`, `沿${place}的动静继续找`],
-      [`把${clue}与先前线索对照`, `查看${place}谁在避开目光`, `先收好证物不惊动旁人`],
-      [`顺着${clue}出现的方向查`, `问${npc}此物原先在何处`, `留在${place}等变化再发生`],
-    ];
-    return withContradictionOption(sets[variant].slice(0, 2), contradictionOption);
-  }
-  if (/(去|走|前往|离开|回|进入|出门|跟|追)/.test(playerInput)) {
-    return withContradictionOption([
-      `沿${place}人少的方向追去`,
-      `请${npc}带路避开巡查`,
-    ], contradictionOption);
-  }
-  if (/(拒绝|不理|忽视|算了|离远|躲|藏)/.test(playerInput)) {
-    return withContradictionOption([
-      `离开${place}但记住${clue}`,
-      `让${npc}替你留意后续`,
-    ], contradictionOption);
-  }
-  return withContradictionOption([
-    `问${npc}关于「${clue}」的来由`,
-    `在${place}寻找能印证此事的人`,
-  ], contradictionOption);
+  return withContradictionOption(['静观其变...'], contradictionOption);
 }
 
 function normalizeOptionForComparison(option: string): string {
@@ -1383,28 +1336,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         setShowLetterBox(true);
         return;
       }
-      if (!currentState.mailbox.discovered && !currentState.letterHistory.some((l) => l.from === 'linShen')) {
-        const updated: PlayerState = {
-          ...currentState,
-          chapter: 'mailbox_found',
-          mailbox: {
-            ...currentState.mailbox,
-            discovered: true,
-            pendingFirstOpen: true,
-            unread: [],
-          },
-          events: currentState.events.includes('发现邮箱') ? currentState.events : [...currentState.events, '发现邮箱'],
-        };
-        gameStateRef.current = updated;
-        onStateChange(updated);
-        saveGameState(updated);
-        void prepareIncomingLetter(null);
-        const sysMsg: ChatMessage = { role: 'system', content: '📮 信匣泛起金光……', timestamp: Date.now() };
-        const newMsgs = [...messagesRef.current, sysMsg];
-        setMessages(newMsgs);
-        saveChatHistory(newMsgs);
-        return;
-      }
+      // 没有未读、没有 pending → 不拦截，当普通选项继续走正常对话
     }
 
     const contradictionEvent = findContradictionEventByOption(gameStateRef.current, option);
