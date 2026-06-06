@@ -9,7 +9,7 @@
 
 立刻修复当前可感知的 bug，不涉及大改动。
 
-### Task 1.1 ⬜ 信件选项误触空信匣（EP-4）
+### Task 1.1 ✅ 信件选项误触空信匣（EP-4）
 
 **问题**：`isLetterRelatedOption()` 匹配到含"信"字的选项后，即使没有未读信也没有 pending，第三个分支会强制触发邮箱发现 → 打开空信匣。
 
@@ -32,7 +32,7 @@ if (isLetterRelatedOption(option)) {
 
 ---
 
-### Task 1.2 ⬜ Fallback 选项改为单按钮"静观其变..."（EP-3）
+### Task 1.2 ✅ Fallback 选项改为单按钮"静观其变..."（EP-3）
 
 **问题**：`fallbackOptions()` 用 npc/place/clue 变量填充模板选项，变量提取经常不准，导致和剧情无关的选项。
 
@@ -59,7 +59,7 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
 
 ---
 
-### Task 1.3 ⬜ lint + build + push
+### Task 1.3 ✅ lint + build + push
 
 完成 1.1 和 1.2 后，运行 `npm run lint && npm run build`，通过后 commit 并 push。
 
@@ -69,7 +69,7 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
 
 彻底消除视频生成导致的信件系统卡顿和触发失败。
 
-### Task 2.1 ⬜ letter API 改为返回图片 prompt
+### Task 2.1 ✅ letter API 改为返回图片 prompt
 
 **文件**：`src/app/api/letter/route.ts`
 
@@ -116,7 +116,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 2.2 ⬜ GameScreen 信件流程同步化
+### Task 2.2 ✅ GameScreen 信件流程同步化
 
 **文件**：`src/components/GameScreen.tsx`
 
@@ -135,7 +135,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 2.3 ⬜ LetterModal 视频播放器改为图片展示
+### Task 2.3 ✅ LetterModal 视频播放器改为图片展示
 
 **文件**：`src/components/LetterModal.tsx`（或信匣内的信件展示组件）
 
@@ -146,7 +146,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 2.4 ⬜ 类型清理
+### Task 2.4 ✅ 类型清理
 
 **文件**：`src/lib/prompts.ts`（类型定义区域）
 
@@ -157,7 +157,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 2.5 ⬜ 生成预置首封信图片
+### Task 2.5 ⬜ (使用占位图 /images/linshen-first-letter.webp，需后续生成) 生成预置首封信图片
 
 用 Agnes Image 生成一张2077投信机场景图：
 - prompt: `{IMAGE_STYLE_PREFIX} Wide shot, eye-level. A glowing ceramic mailbox sits on a translucent desk in a dim near-future apartment. Soft golden light emanates from inside the mailbox, illuminating scattered handwritten letters around it. Holographic city skyline visible through a rain-streaked window behind. Quiet, intimate, a bridge between two eras. {IMAGE_CONSTRAINT_SUFFIX}`
@@ -166,7 +166,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 2.6 ⬜ lint + build + push
+### Task 2.6 ✅ lint + build + push
 
 ---
 
@@ -174,7 +174,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 提升每轮对话头部场景图的视觉质量，增加镜头语言和人物互动感。已做好的风格和人物一致性不改动。
 
-### Task 3.1 ⬜ SCENE prompt 规则改写
+### Task 3.1 ✅ SCENE prompt 规则改写
 
 **文件**：`src/lib/prompts.ts`，WORLD_SETTING 内的「场景标记规则」段落
 
@@ -195,7 +195,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 3.2 ⬜ IMAGE_PROMPT_SUFFIX 拆为前缀 + 后缀
+### Task 3.2 ✅ IMAGE_PROMPT_SUFFIX 拆为前缀 + 后缀
 
 **文件**：`src/lib/prompts.ts`
 
@@ -213,7 +213,7 @@ export const IMAGE_CONSTRAINT_SUFFIX = `Correct human anatomy, exactly two arms 
 
 ---
 
-### Task 3.3 ⬜ 场景图拼接顺序改造
+### Task 3.3 ✅ 场景图拼接顺序改造
 
 **文件**：`src/components/GameScreen.tsx`，所有 `generateSceneImage()` 调用处（约3处）
 
@@ -227,7 +227,7 @@ export const IMAGE_CONSTRAINT_SUFFIX = `Correct human anatomy, exactly two arms 
 
 ---
 
-### Task 3.4 ⬜ lint + build + push + 实际体验验证
+### Task 3.4 ✅ lint + build + push + 实际体验验证
 
 push 后在线上开一局新游戏，对比前后场景图效果。重点观察：
 - 人物是否不再正面看镜头
@@ -241,7 +241,7 @@ push 后在线上开一局新游戏，对比前后场景图效果。重点观察
 
 核心原则：Prompt 只管创意，代码强制规则。在 AI 响应和玩家之间加一层铁门。
 
-### Task 4.1 ⬜ 实现 sanitizeResponse() 函数
+### Task 4.1 ✅ 实现 sanitizeResponse() 函数
 
 **文件**：`src/components/GameScreen.tsx`（或提取到 `src/lib/sanitize.ts`）
 
@@ -275,7 +275,7 @@ function sanitizeResponse(raw: string, state: PlayerState): string {
 
 ---
 
-### Task 4.2 ⬜ 实现 sanitizeOptions() 函数
+### Task 4.2 ✅ 实现 sanitizeOptions() 函数
 
 **功能**：过滤 AI 生成的选项。
 
@@ -293,7 +293,7 @@ function sanitizeOptions(options: string[], messages: ChatMessage[]): string[] {
 
 ---
 
-### Task 4.3 ⬜ 实现 sanitizeState() 函数
+### Task 4.3 ✅ 实现 sanitizeState() 函数
 
 **功能**：清洗解析出的 STATE 标记。
 
@@ -317,7 +317,7 @@ function sanitizeState(parsed: ParsedState, playerState: PlayerState): ParsedSta
 
 ---
 
-### Task 4.4 ⬜ 在 handleSendMessage 中接入三个清洗函数
+### Task 4.4 ✅ 在 handleSendMessage 中接入三个清洗函数
 
 **文件**：`src/components/GameScreen.tsx`
 
@@ -328,7 +328,7 @@ function sanitizeState(parsed: ParsedState, playerState: PlayerState): ParsedSta
 
 ---
 
-### Task 4.5 ⬜ lint + build + push
+### Task 4.5 ✅ lint + build + push
 
 ---
 
@@ -421,7 +421,7 @@ src/components/
 
 ---
 
-### Task 6.2 ⬜ React Error Boundary
+### Task 6.2 ✅ React Error Boundary
 
 **文件**：新建 `src/components/ErrorBoundary.tsx`
 
@@ -467,7 +467,7 @@ src/components/
 
 ## Phase 7：体验打磨（1天）
 
-### Task 7.1 ⬜ OG/Social meta tags
+### Task 7.1 ✅ OG/Social meta tags
 
 **文件**：`src/app/layout.tsx`
 
@@ -513,7 +513,7 @@ src/components/
 
 ---
 
-### Task 7.8 ⬜ OpenAI client 单例化
+### Task 7.8 ✅ OpenAI client 单例化
 
 **改法**：`chat/route.ts` 模块顶层创建 client 实例，所有请求共用。
 
