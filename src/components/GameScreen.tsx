@@ -141,7 +141,7 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
 
 function getContradictionOption(state: PlayerState): string | null {
   for (const [event, sources] of Object.entries(state.eventVersions || {})) {
-    if (Object.keys(sources || {}).length >= 2) {
+    if (Object.keys(sources || {}).length >= 2 && !hasAskedContradiction(state, event)) {
       const label = EVENT_LABELS[event] || event
         .replace(/^anchor_/, '')
         .replace(/_/g, ' ')
@@ -159,6 +159,25 @@ function withContradictionOption(options: string[], contradictionOption: string 
 
 function normalizeOptionLabel(option: string): string {
   return option.replace(/「(anchor_[a-z0-9_]+)」/gi, (_, key: string) => `「${EVENT_LABELS[key] || key.replace(/^anchor_/, '').replace(/_/g, ' ')}」`);
+}
+
+function contradictionAskedMarker(event: string): string {
+  return `contradiction_asked:${event}`;
+}
+
+function hasAskedContradiction(state: PlayerState, event: string): boolean {
+  return (state.events || []).includes(contradictionAskedMarker(event));
+}
+
+function findContradictionEventByOption(state: PlayerState, option: string): string | null {
+  const match = option.match(/追问「(.+?)」的不同说法/);
+  if (!match) return null;
+  const label = match[1].trim();
+  for (const event of Object.keys(state.eventVersions || {})) {
+    const eventLabel = EVENT_LABELS[event] || event.replace(/^anchor_/, '').replace(/_/g, ' ').trim();
+    if (label === eventLabel || label === event) return event;
+  }
+  return null;
 }
 
 function ensureMailboxOption(options: string[], state: PlayerState): string[] {
@@ -423,7 +442,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setIsStreaming(true);
 
     const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: Date.now() };
-    const playerStateForApi = { ...gs, crossLineEchoes: getCrossLineEchoes(gs.role) };
+    const playerStateForApi = {
+      ...gs,
+      events: (gs.events || []).filter((event) => !event.startsWith('contradiction_asked:')),
+      crossLineEchoes: getCrossLineEchoes(gs.role),
+    };
     const apiMessages = [...msgs, userMsg]
       .filter(m => m.role !== 'system')
       .slice(-20)
@@ -618,7 +641,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     try {
       const gs = gameStateRef.current;
       const currentHistory = gs.letterHistory || [];
-      const playerStateForApi = { ...gs, crossLineEchoes: getCrossLineEchoes(gs.role) };
+      const playerStateForApi = {
+        ...gs,
+        events: (gs.events || []).filter((event) => !event.startsWith('contradiction_asked:')),
+        crossLineEchoes: getCrossLineEchoes(gs.role),
+      };
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1053,6 +1080,30 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     sendMessage(input.trim());
   }
 
+  function handleOptionClick(option: string) {
+    if (isMailboxOption(option, gameState)) {
+      openLetter();
+      return;
+    }
+
+    const contradictionEvent = findContradictionEventByOption(gameStateRef.current, option);
+    if (contradictionEvent) {
+      const marker = contradictionAskedMarker(contradictionEvent);
+      const currentState = gameStateRef.current;
+      if (!currentState.events.includes(marker)) {
+        const updated = {
+          ...currentState,
+          events: [...currentState.events, marker],
+        };
+        gameStateRef.current = updated;
+        onStateChange(updated);
+        saveGameState(updated);
+      }
+    }
+
+    sendMessage(option);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -1253,7 +1304,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             {currentOptions.map((option, i) => (
               <button
                 key={i}
-                onClick={() => isMailboxOption(option, gameState) ? openLetter() : sendMessage(option)}
+                onClick={() => handleOptionClick(option)}
                 className={`w-full text-left px-4 py-2 rounded-lg border text-sm transition-colors ${
                   isMailboxOption(option, gameState)
                     ? 'bg-amber-700/20 border-amber-400/35 text-amber-200/90 animate-pulse-glow'
