@@ -120,7 +120,7 @@ const FALLBACK_FIRST_LETTER = `陌生的收信人：
 
 function buildVideoPrompt(content: string, letterNumber: number): string {
   const excerpt = content.replace(/\s+/g, ' ').slice(0, 420);
-  return `A five-second cinematic glimpse sent from the year 2077 with a personal letter. Letter number ${letterNumber}. Visualize one concrete future environment implied by this letter: ${excerpt}. Near-future Chinese city, restrained believable technology, traces of loneliness and human habitation, coherent single scene, slow camera movement, one consistent person at most, natural anatomy, no duplicate person, no text, no subtitles, no letters, no logos, no watermark.`;
+  return `A ten-second cinematic glimpse sent from the year 2077 with a personal letter. Letter number ${letterNumber}. Visualize one concrete future environment implied by this letter: ${excerpt}. Near-future Chinese city, restrained believable technology, traces of loneliness and human habitation, coherent single scene with a clear beginning and ending, slow camera movement, one consistent person at most, natural anatomy, no duplicate person, no text, no subtitles, no letters, no logos, no watermark.`;
 }
 
 export async function POST(req: NextRequest) {

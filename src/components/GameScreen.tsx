@@ -48,6 +48,12 @@ const CHAT_TIMEOUT_MS = 45_000;
 const NEW_LETTER_OPTION = '信匣里有一封新信';
 const VIDEO_POLL_INTERVAL_MS = 10_000;
 const VIDEO_POLL_MAX_ATTEMPTS = 30;
+const MUSIC_ENABLED_KEY = 'letters-from-changan-music-enabled-v1';
+const MUSIC_TRACKS: Record<'act1' | 'act2' | 'act3', string> = {
+  act1: '/audio/changan-act-1.mp3',
+  act2: '/audio/changan-act-2.mp3',
+  act3: '/audio/changan-act-3.mp3',
+};
 
 const EVENT_LABELS: Record<string, string> = {
   anchor_inn_basement_future: '客栈暗处的未来痕迹',
@@ -483,10 +489,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [shareImageUrl, setShareImageUrl] = useState('');
   const [saveToast, setSaveToast] = useState('');
   const [ending, setEnding] = useState<{ title: string; scenes: string[] } | null>(null);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicUnavailable, setMusicUnavailable] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
   const preparingLetterRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Always-fresh refs to avoid React closure staleness in async callbacks
   const gameStateRef = useRef(gameState);
@@ -576,7 +585,86 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
     void resumePendingLetter(pending.id, pending.content, pending.video);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState.mailbox?.pending?.id]);
+  }, [
+    gameState.mailbox?.pending?.id,
+    gameState.mailbox?.pending?.video.status,
+    gameState.mailbox?.pending?.video.retryCount,
+  ]);
+
+  useEffect(() => {
+    setMusicEnabled(localStorage.getItem(MUSIC_ENABLED_KEY) === 'true');
+  }, []);
+
+  useEffect(() => {
+    const track = MUSIC_TRACKS[gameState.storyPhase || 'act1'];
+    const audio = audioRef.current || new Audio();
+    audioRef.current = audio;
+    audio.loop = true;
+    audio.preload = 'auto';
+    let cancelled = false;
+    const timers: number[] = [];
+
+    const fadeTo = (target: number, duration: number) => new Promise<void>((resolve) => {
+      const start = audio.volume;
+      const startedAt = performance.now();
+      const timer = window.setInterval(() => {
+        if (cancelled) {
+          window.clearInterval(timer);
+          resolve();
+          return;
+        }
+        const progress = Math.min(1, (performance.now() - startedAt) / duration);
+        audio.volume = start + (target - start) * progress;
+        if (progress >= 1) {
+          window.clearInterval(timer);
+          resolve();
+        }
+      }, 50);
+      timers.push(timer);
+    });
+
+    const updateMusic = async () => {
+      if (!musicEnabled) {
+        await fadeTo(0, 350);
+        if (!cancelled) audio.pause();
+        return;
+      }
+
+      if (!audio.src.endsWith(track)) {
+        if (!audio.paused) await fadeTo(0, 500);
+        audio.src = track;
+        audio.currentTime = 0;
+      }
+
+      try {
+        await audio.play();
+        setMusicUnavailable(false);
+        await fadeTo(0.22, 700);
+      } catch {
+        setMusicUnavailable(true);
+        setMusicEnabled(false);
+        localStorage.setItem(MUSIC_ENABLED_KEY, 'false');
+      }
+    };
+
+    void updateMusic();
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearInterval(timer));
+    };
+  }, [gameState.storyPhase, musicEnabled]);
+
+  useEffect(() => () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+  }, []);
+
+  function toggleMusic() {
+    const next = !musicEnabled;
+    setMusicEnabled(next);
+    setMusicUnavailable(false);
+    localStorage.setItem(MUSIC_ENABLED_KEY, String(next));
+  }
 
   useEffect(() => {
     if (hasDiscoveredMailbox(gameState) && getUnreadLetterCount(gameState) === 0) {
@@ -865,7 +953,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           prompt: previous.prompt,
           width: 1152,
           height: 640,
-          num_frames: 121,
+          num_frames: 241,
           frame_rate: 24,
         }),
       });
@@ -933,7 +1021,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           prompt: data.videoPrompt,
           width: 1152,
           height: 640,
-          num_frames: 121,
+          num_frames: 241,
           frame_rate: 24,
         }),
       });
@@ -1290,6 +1378,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const roleInfo = ROLES[gameState.role];
   const unreadLetterCount = getUnreadLetterCount(gameState);
   const shouldGlowLetterBox = unreadLetterCount > 0;
+  const isWaitingForLetter = Boolean(gameState.mailbox.pending);
 
   // Prologue
   if (gamePhase === 'prologue') {
@@ -1364,15 +1453,29 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
         <div className="justify-self-end flex min-w-10 items-center justify-end">
+          <button
+            onClick={toggleMusic}
+            className={`flex h-7 w-7 items-center justify-center text-sm transition-colors hover:text-amber-400 ${
+              musicEnabled ? 'text-amber-300/80' : 'text-amber-400/35'
+            }`}
+            title={musicUnavailable ? '乐声尚未备好' : musicEnabled ? '关闭背景音乐' : '开启背景音乐'}
+            aria-label={musicEnabled ? '关闭背景音乐' : '开启背景音乐'}
+          >
+            {musicEnabled ? '♫' : '♪'}
+          </button>
           <button onClick={() => void handleShareCard()} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="生成分享卡片">
             🕊️
           </button>
           <button
             onClick={() => setShowLetterBox(true)}
             className={`flex h-7 w-7 items-center justify-center text-sm hover:text-amber-400 ${
-              shouldGlowLetterBox ? 'text-amber-300/90 mailbox-soft-glow' : 'text-amber-400/40'
+              shouldGlowLetterBox
+                ? 'text-amber-300/90 mailbox-soft-glow'
+                : isWaitingForLetter
+                  ? 'text-amber-400/55 animate-pulse'
+                  : 'text-amber-400/40'
             }`}
-            title={shouldGlowLetterBox ? '新信到了' : '信匣'}
+            title={shouldGlowLetterBox ? '新信到了' : isWaitingForLetter ? '等待林深回信' : '信匣'}
           >
             📜
           </button>
@@ -1483,6 +1586,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       {showLetterBox && (
         <LetterBox
           letters={gameState.letterHistory}
+          pending={gameState.mailbox.pending}
           onClose={() => setShowLetterBox(false)}
           onOpenLetter={(id) => {
             setShowLetterBox(false);

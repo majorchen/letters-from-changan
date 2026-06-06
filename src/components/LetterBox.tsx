@@ -1,15 +1,16 @@
 'use client';
 
-import { LetterEntry } from '@/lib/prompts';
+import { LetterEntry, PendingLetter } from '@/lib/prompts';
 import LetterVideo from './LetterVideo';
 
 interface Props {
   letters: LetterEntry[];
   onClose: () => void;
   onOpenLetter: (id: string) => void;
+  pending?: PendingLetter;
 }
 
-export default function LetterBox({ letters, onClose, onOpenLetter }: Props) {
+export default function LetterBox({ letters, onClose, onOpenLetter, pending }: Props) {
   if (letters.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -19,6 +20,13 @@ export default function LetterBox({ letters, onClose, onOpenLetter }: Props) {
             长安万户灯，尚无一纸来。
           </div>
           <div className="text-amber-700/45 text-sm mt-3">信匣里还没有留下字迹</div>
+          {pending && (
+            <div className="mt-5 border-t border-amber-900/15 pt-4 text-sm leading-6 text-amber-800/55">
+              {pending.video.status === 'failed'
+                ? '回信仍在穿越途中，信匣会继续等候。'
+                : '林深尚未回信，随信影像正在穿越途中。'}
+            </div>
+          )}
           <button onClick={onClose} className="mt-4 px-4 py-2 text-amber-800/50 text-sm hover:text-amber-800/80">
             关闭
           </button>
@@ -44,6 +52,13 @@ export default function LetterBox({ letters, onClose, onOpenLetter }: Props) {
 
         {/* Letters list */}
         <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 chat-scroll">
+          {pending && (
+            <div className="px-2 py-3 text-center text-xs leading-6 text-amber-300/45">
+              {pending.video.status === 'failed'
+                ? '回信仍在穿越途中，稍后会继续尝试。'
+                : '林深尚未回信 · 随信影像正在生成'}
+            </div>
+          )}
           {sorted.map((letter) => {
             const isFromLinShen = letter.from === 'linShen';
             const isUnread = isFromLinShen && !letter.readAt;

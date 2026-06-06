@@ -7,10 +7,11 @@ Agnes video v2.0 docs: https://agnes-ai.com/doc/agnes-video-v20
 ## Agnes API Details
 
 - Create: `POST /v1/videos`
-- Poll: `GET /v1/videos/{task_id}`
+- Preferred poll: `GET /agnesapi?video_id={video_id}&model_name=agnes-video-v2.0`
+- Legacy fallback only: `GET /v1/videos/{task_id}`
 - Model: `agnes-video-v2.0`
 - Default size: `1152x768`
-- Default frames: `121`
+- Letter video frames: `241` (about 10 seconds at 24fps)
 - Default frame rate: `24`
 - Auth: same `AGNES_API_KEY` bearer token and `AGNES_API_URL` base URL used by chat/image.
 

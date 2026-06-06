@@ -9,6 +9,7 @@ const files = {
   video: await readFile(new URL('../src/app/api/video/route.ts', import.meta.url), 'utf8'),
   letter: await readFile(new URL('../src/app/api/letter/route.ts', import.meta.url), 'utf8'),
   letterVideo: await readFile(new URL('../src/components/LetterVideo.tsx', import.meta.url), 'utf8'),
+  letterBox: await readFile(new URL('../src/components/LetterBox.tsx', import.meta.url), 'utf8'),
   ending: await readFile(new URL('../src/components/EndingSequence.tsx', import.meta.url), 'utf8'),
   start: await readFile(new URL('../src/components/StartScreen.tsx', import.meta.url), 'utf8'),
 };
@@ -22,7 +23,15 @@ const checks = [
   },
   {
     name: 'followup letters glow in header mailbox',
-    pass: files.game.includes('shouldGlowLetterBox') && files.game.includes("title={shouldGlowLetterBox ? '新信到了' : '信匣'}"),
+    pass: files.game.includes('shouldGlowLetterBox')
+      && files.game.includes("'等待林深回信'")
+      && files.game.includes('mailbox-soft-glow'),
+  },
+  {
+    name: 'pending Lin Shen reply is visible and retries after failure',
+    pass: files.letterBox.includes('林深尚未回信')
+      && files.game.includes('pending?.video.status')
+      && files.game.includes('retryPendingLetter'),
   },
   {
     name: 'internal continuation prompts can be hidden',
@@ -57,7 +66,15 @@ const checks = [
     name: 'every incoming letter is paired with an inline video',
     pass: files.letter.includes('videoPrompt')
       && files.game.includes("type: 'letter'")
+      && files.game.includes('num_frames: 241')
       && files.letterVideo.includes('playsInline'),
+  },
+  {
+    name: 'three-act background music is optional and defaults to off',
+    pass: files.game.includes('MUSIC_TRACKS')
+      && files.game.includes("localStorage.getItem(MUSIC_ENABLED_KEY) === 'true'")
+      && files.game.includes('toggleMusic')
+      && files.game.includes("act3: '/audio/changan-act-3.mp3'"),
   },
   {
     name: 'cloud saves are optional and Supabase-backed',
