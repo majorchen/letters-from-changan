@@ -1,13 +1,16 @@
 # Letters from Chang'an - 优化计划
 
 > 2026-06-06 创建 · 按 Phase 执行，每个 Task 独立可交付
+> 最后更新：2026-06-06 21:30
 > 状态标记：⬜ 待做 · 🔄 进行中 · ✅ 完成
+>
+> **进度概览：Phase 1-4 ✅ 全部完成 | Phase 5 ⬜ 待做 | Phase 6 部分完成 | Phase 7 部分完成 | 补充 Task ✅**
 
 ---
 
-## Phase 1：体验热修复（30分钟）
+## Phase 1：体验热修复（30分钟）✅ 完成
 
-立刻修复当前可感知的 bug，不涉及大改动。
+立刻修复当前可感知的 bug，不涉及大改动。commit `edcc4b3`
 
 ### Task 1.1 ✅ 信件选项误触空信匣（EP-4）
 
@@ -65,9 +68,9 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
 
 ---
 
-## Phase 2：信件附件从视频改为图片（1-2小时）
+## Phase 2：信件附件从视频改为图片（1-2小时）✅ 完成
 
-彻底消除视频生成导致的信件系统卡顿和触发失败。
+彻底消除视频生成导致的信件系统卡顿和触发失败。commit `1249d60`
 
 ### Task 2.1 ✅ letter API 改为返回图片 prompt
 
@@ -170,9 +173,9 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-## Phase 3：场景图电影镜头感（30分钟）
+## Phase 3：场景图电影镜头感（30分钟）✅ 完成
 
-提升每轮对话头部场景图的视觉质量，增加镜头语言和人物互动感。已做好的风格和人物一致性不改动。
+提升每轮对话头部场景图的视觉质量，增加镜头语言和人物互动感。已做好的风格和人物一致性不改动。commit `1249d60`（与 Phase 2 合并提交）
 
 ### Task 3.1 ✅ SCENE prompt 规则改写
 
@@ -237,9 +240,9 @@ push 后在线上开一局新游戏，对比前后场景图效果。重点观察
 
 ---
 
-## Phase 4：代码防护层 sanitizeResponse（1-2小时）
+## Phase 4：代码防护层 sanitizeResponse（1-2小时）✅ 完成
 
-核心原则：Prompt 只管创意，代码强制规则。在 AI 响应和玩家之间加一层铁门。
+核心原则：Prompt 只管创意，代码强制规则。在 AI 响应和玩家之间加一层铁门。commit `7df2175`
 
 ### Task 4.1 ✅ 实现 sanitizeResponse() 函数
 
@@ -519,16 +522,29 @@ src/components/
 
 ---
 
+## 补充 Task（Phase 外，按需添加）
+
+### Task S.1 ✅ 场景图自动清理（防 localStorage 膨胀）
+
+**问题**：每轮对话生成的场景图 URL 存在 `ChatMessage.sceneImage` 里，持久化到 localStorage，导致存储越来越大。
+
+**改法**：`saveChatHistory()` 保存前自动调用 `trimSceneImages()`，只保留最近 3 条 `sceneImage`，更早的消息清掉该字段。来信配图（`letterHistory[].image`）不受影响，永久保留。
+
+**文件**：`src/lib/gameState.ts`，commit `84ddfd9`
+
+---
+
 ## 总览
 
-| Phase | 主题 | 预估工时 | 核心收益 |
-|-------|------|---------|---------|
-| **Phase 1** | 体验热修复 | 30分钟 | 消除信匣误触 + fallback 乱选项 |
-| **Phase 2** | 信件视频→图片 | 1-2小时 | 信件系统从卡5分钟变成10秒 |
-| **Phase 3** | 场景图镜头感 | 30分钟 | 画面从摆拍变电影感 |
-| **Phase 4** | 代码防护层 | 1-2小时 | prompt 规则不再脆弱 |
-| **Phase 5** | 架构重构 | 2-3天 | 1600行→300行，可维护 |
-| **Phase 6** | 可靠性与安全 | 1-2天 | API 保护 + 容错 + 数据安全 |
-| **Phase 7** | 体验打磨 | 1天 | 传播、无障碍、代码整洁 |
+| Phase | 主题 | 预估工时 | 状态 | 核心收益 |
+|-------|------|---------|------|---------|
+| **Phase 1** | 体验热修复 | 30分钟 | ✅ 完成 | 消除信匣误触 + fallback 乱选项 |
+| **Phase 2** | 信件视频→图片 | 1-2小时 | ✅ 完成 | 信件系统从卡5分钟变成10秒 |
+| **Phase 3** | 场景图镜头感 | 30分钟 | ✅ 完成 | 画面从摆拍变电影感 |
+| **Phase 4** | 代码防护层 | 1-2小时 | ✅ 完成 | prompt 规则不再脆弱 |
+| **Phase 5** | 架构重构 | 2-3天 | ⬜ 待做 | 1600行→300行，可维护 |
+| **Phase 6** | 可靠性与安全 | 1-2天 | 🔄 1/6 完成 | API 保护 + 容错 + 数据安全 |
+| **Phase 7** | 体验打磨 | 1天 | 🔄 2/8 完成 | 传播、无障碍、代码整洁 |
+| **补充** | 场景图清理 | 15分钟 | ✅ 完成 | 防 localStorage 膨胀 |
 
-**推荐执行顺序**：Phase 1 → 2 → 3 → 4 → 6.1 → 5 → 6 余项 → 7
+**下一步推荐**：Phase 6.1（API rate limit）→ Phase 5.1（prompts.ts 拆分）→ Phase 5.3（normalize 去重）→ 其余按需
