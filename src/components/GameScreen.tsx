@@ -4,7 +4,7 @@ import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, NarrativeStateUpdate } from '@/lib/gameState';
-import { LetterEntry, LetterVideo, PlayerState, ROLES, VisualProfile } from '@/lib/prompts';
+import { LetterEntry, LetterImage, PlayerState, ROLES, VisualProfile, IMAGE_STYLE_PREFIX, IMAGE_CONSTRAINT_SUFFIX } from '@/lib/prompts';
 import { getCloudUserEmail } from '@/lib/cloudSaves';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
@@ -46,10 +46,8 @@ const GAME_URL = 'https://letterstang.aifisher.cn';
 const GUEST_FIRST_LETTER_TOAST_KEY = 'letters-from-changan-guest-first-letter-toast-v1';
 const CHAT_TIMEOUT_MS = 45_000;
 const NEW_LETTER_OPTION = '信匣里有一封新信';
-const VIDEO_POLL_INTERVAL_MS = 10_000;
-const VIDEO_POLL_MAX_ATTEMPTS = 30;
 const ACTIVE_LETTER_INTERVAL_TURNS = 8;
-const FIRST_LETTER_VIDEO_URL = '/video/linshen-first-letter.mp4';
+const FIRST_LETTER_IMAGE_URL = '/images/linshen-first-letter.webp';
 
 const EVENT_LABELS: Record<string, string> = {
   anchor_inn_basement_future: '客栈暗处的未来痕迹',
@@ -476,7 +474,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [isStreaming, setIsStreaming] = useState(false);
   const [showLetter, setShowLetter] = useState(false);
   const [letterContent, setLetterContent] = useState('');
-  const [activeLetterVideo, setActiveLetterVideo] = useState<LetterVideo | undefined>();
+  const [activeLetterImage, setActiveLetterImage] = useState<LetterImage | undefined>();
   const [activeLetterWasUnread, setActiveLetterWasUnread] = useState(false);
   const [letterLoading, setLetterLoading] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
@@ -573,44 +571,24 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   useEffect(() => {
     const pending = gameState.mailbox?.pending;
     if (!pending || preparingLetterRef.current) return;
-    if (gameState.letterHistory.every((letter) => letter.from !== 'linShen')) {
-      const now = Date.now();
-      void finishIncomingLetter(pending.id, pending.content, {
-        key: 'preset:first-letter-2077',
-        status: 'ready',
-        prompt: pending.video.prompt,
-        url: FIRST_LETTER_VIDEO_URL,
-        createdAt: now,
-        updatedAt: now,
-      });
+    if (pending.image) {
+      void finishIncomingLetter(pending.id, pending.content, pending.image);
       return;
     }
-    if (pending.video.status === 'failed') {
-      if ((pending.video.retryCount || 0) <= 2) {
-        void retryPendingLetter(pending.id, pending.content, pending.video);
-      } else {
-        const current = gameStateRef.current;
-        const updated = {
-          ...current,
-          mailbox: {
-            ...current.mailbox,
-            pending: undefined,
-            lastGeneratedAtTurn: Math.max(0, current.turnCount - ACTIVE_LETTER_INTERVAL_TURNS + 2),
-          },
-        };
-        gameStateRef.current = updated;
-        onStateChange(updated);
-        saveGameState(updated);
-      }
-      return;
-    }
-    void resumePendingLetter(pending.id, pending.content, pending.video);
+    const current = gameStateRef.current;
+    const updated = {
+      ...current,
+      mailbox: {
+        ...current.mailbox,
+        pending: undefined,
+        lastGeneratedAtTurn: Math.max(0, current.turnCount - ACTIVE_LETTER_INTERVAL_TURNS + 2),
+      },
+    };
+    gameStateRef.current = updated;
+    onStateChange(updated);
+    saveGameState(updated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    gameState.mailbox?.pending?.id,
-    gameState.mailbox?.pending?.video.status,
-    gameState.mailbox?.pending?.video.retryCount,
-  ]);
+  }, [gameState.mailbox?.pending?.id]);
 
   useEffect(() => {
     if (hasDiscoveredMailbox(gameState) && getUnreadLetterCount(gameState) === 0) {
@@ -666,7 +644,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       if (sceneMatch) {
         const sceneDesc = sceneMatch[1].trim();
         generateSceneImage(
-          sceneDesc + visualProfilesForScene(updated, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
+          IMAGE_STYLE_PREFIX + ' ' + sceneDesc + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
         );
       } else {
         let usedKeywordFallback = false;
@@ -674,7 +652,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           if (rawContent.includes(loc.keyword)) {
             usedKeywordFallback = true;
             generateSceneImage(
-              loc.scene + visualProfilesForScene(updated, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
+              IMAGE_STYLE_PREFIX + ' ' + loc.scene + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
             );
             break;
           }
@@ -682,7 +660,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         if (!usedKeywordFallback) {
           const fallbackScene = fallbackSceneFromNarrative(updated, cleanContent);
           generateSceneImage(
-            fallbackScene + visualProfilesForScene(updated, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
+            IMAGE_STYLE_PREFIX + ' ' + fallbackScene + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
           );
         }
       }
@@ -770,7 +748,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       return;
     }
     setLetterContent(letter.content);
-    setActiveLetterVideo(letter.video);
+    setActiveLetterImage(letter.image || letter.video);
     const wasUnread = !letter.readAt;
     setActiveLetterWasUnread(wasUnread);
     const updated: PlayerState = {
@@ -792,29 +770,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
-  async function pollLetterVideo(video: LetterVideo, attempt = 1): Promise<LetterVideo | null> {
-    const params = new URLSearchParams({ key: video.key, type: 'letter', prompt: video.prompt });
-    if (video.videoId) params.set('videoId', video.videoId);
-    if (video.taskId) params.set('taskId', video.taskId);
-    const res = await fetch(`/api/video?${params.toString()}`);
-    const data = await res.json();
-    const status = String(data.status || '').toLowerCase();
-    if (data.url) {
-      return {
-        ...video,
-        status: 'ready',
-        taskId: data.taskId || video.taskId,
-        videoId: data.videoId || video.videoId,
-        url: data.url,
-        updatedAt: Date.now(),
-      };
-    }
-    if (['failed', 'error'].includes(status) || attempt >= VIDEO_POLL_MAX_ATTEMPTS) return null;
-    await new Promise((resolve) => window.setTimeout(resolve, VIDEO_POLL_INTERVAL_MS));
-    return pollLetterVideo(video, attempt + 1);
-  }
-
-  async function finishIncomingLetter(id: string, content: string, video: LetterVideo) {
+  async function finishIncomingLetter(id: string, content: string, image: LetterImage) {
     const gs = gameStateRef.current;
     if (gs.letterHistory.some((letter) => letter.id === id)) return;
     const letter: LetterEntry = {
@@ -823,7 +779,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       content,
       timestamp: Date.now(),
       noticeShown: false,
-      video,
+      image,
     };
     const updated: PlayerState = {
       ...gs,
@@ -860,86 +816,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     saveGameState(updated);
   }
 
-  async function resumePendingLetter(id: string, content: string, video: LetterVideo) {
-    if (preparingLetterRef.current) return;
-    preparingLetterRef.current = true;
-    try {
-      const ready = await pollLetterVideo(video);
-      if (ready) {
-        await finishIncomingLetter(id, content, ready);
-        return;
-      }
-      const gs = gameStateRef.current;
-      const failedVideo: LetterVideo = {
-        ...video,
-        status: 'failed',
-        retryCount: (video.retryCount || 0) + 1,
-        updatedAt: Date.now(),
-      };
-      const updated: PlayerState = {
-        ...gs,
-        mailbox: { ...gs.mailbox, pending: { id, content, video: failedVideo } },
-      };
-      gameStateRef.current = updated;
-      onStateChange(updated);
-      saveGameState(updated);
-    } finally {
-      preparingLetterRef.current = false;
-    }
-  }
-
-  async function retryPendingLetter(id: string, content: string, previous: LetterVideo) {
-    if (preparingLetterRef.current) return;
-    preparingLetterRef.current = true;
-    try {
-      const retryCount = previous.retryCount || 0;
-      const key = `${previous.key}:retry-${retryCount + 1}`;
-      const res = await fetch('/api/video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          key,
-          type: 'letter',
-          prompt: previous.prompt,
-          width: 1152,
-          height: 640,
-          num_frames: 241,
-          frame_rate: 24,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || (!data.url && !data.videoId && !data.taskId)) throw new Error(data.error || 'Video retry failed');
-      const video: LetterVideo = {
-        ...previous,
-        key,
-        status: data.url ? 'ready' : 'queued',
-        taskId: data.taskId,
-        videoId: data.videoId,
-        url: data.url,
-        retryCount,
-        updatedAt: Date.now(),
-      };
-      const gs = gameStateRef.current;
-      const updated: PlayerState = {
-        ...gs,
-        mailbox: { ...gs.mailbox, pending: { id, content, video } },
-      };
-      gameStateRef.current = updated;
-      onStateChange(updated);
-      saveGameState(updated);
-      if (video.url) {
-        await finishIncomingLetter(id, content, video);
-      } else {
-        preparingLetterRef.current = false;
-        await resumePendingLetter(id, content, video);
-      }
-    } catch (error) {
-      console.error('[incoming-letter-retry]', error);
-    } finally {
-      preparingLetterRef.current = false;
-    }
-  }
-
   async function prepareIncomingLetter(playerReply: string | null) {
     if (preparingLetterRef.current || gameStateRef.current.mailbox.pending) return;
     preparingLetterRef.current = true;
@@ -959,7 +835,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.content || !data.videoPrompt) throw new Error(data.error || 'Letter generation failed');
+      if (!res.ok || !data.content || !data.imagePrompt) throw new Error(data.error || 'Letter generation failed');
       const id = `letter-${Date.now()}`;
       const key = `letter:${gs.role}:${id}`;
       const isFirstLetter = gs.letterHistory.every((letter) => letter.from !== 'linShen');
@@ -967,58 +843,30 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         const now = Date.now();
         await finishIncomingLetter(id, data.content, {
           key: 'preset:first-letter-2077',
-          status: 'ready',
-          prompt: data.videoPrompt,
-          url: FIRST_LETTER_VIDEO_URL,
+          status: 'ready' as const,
+          prompt: data.imagePrompt,
+          url: FIRST_LETTER_IMAGE_URL,
           createdAt: now,
           updatedAt: now,
         });
         return;
       }
-      const videoRes = await fetch('/api/video', {
+      const imgRes = await fetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          key,
-          type: 'letter',
-          prompt: data.videoPrompt,
-          width: 1152,
-          height: 640,
-          num_frames: 241,
-          frame_rate: 24,
-        }),
+        body: JSON.stringify({ prompt: data.imagePrompt }),
       });
-      const videoData = await videoRes.json();
-      if (!videoRes.ok || (!videoData.url && !videoData.videoId && !videoData.taskId)) {
-        throw new Error(videoData.error || 'Video creation failed');
-      }
-      const video: LetterVideo = {
+      const imgData = await imgRes.json();
+      if (!imgRes.ok || !imgData.url) throw new Error(imgData.error || 'Letter image generation failed');
+      const image: LetterImage = {
         key,
-        status: videoData.url ? 'ready' : 'queued',
-        prompt: data.videoPrompt,
-        taskId: videoData.taskId,
-        videoId: videoData.videoId,
-        url: videoData.url,
+        status: 'ready',
+        prompt: data.imagePrompt,
+        url: imgData.url,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      const pendingState: PlayerState = {
-        ...gameStateRef.current,
-        mailbox: {
-          ...gameStateRef.current.mailbox,
-          discovered: true,
-          pending: { id, content: data.content, video },
-        },
-      };
-      gameStateRef.current = pendingState;
-      onStateChange(pendingState);
-      saveGameState(pendingState);
-      if (video.url) {
-        await finishIncomingLetter(id, data.content, video);
-      } else {
-        preparingLetterRef.current = false;
-        await resumePendingLetter(id, data.content, video);
-      }
+      await finishIncomingLetter(id, data.content, image);
     } catch (error) {
       console.error('[incoming-letter]', error);
     } finally {
@@ -1073,7 +921,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   function handleLetterClose() {
     setShowLetter(false);
-    setActiveLetterVideo(undefined);
+    setActiveLetterImage(undefined);
     if (activeLetterWasUnread) {
       setActiveLetterWasUnread(false);
       setTimeout(() => {
@@ -1560,7 +1408,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       {/* Modals */}
       {showLetter && (
-        <LetterModal content={letterContent} isLoading={letterLoading} onClose={handleLetterClose} onReply={handleReply} canReply={true} video={activeLetterVideo} />
+        <LetterModal content={letterContent} isLoading={letterLoading} onClose={handleLetterClose} onReply={handleReply} canReply={true} image={activeLetterImage} />
       )}
       {showLetterBox && (
         <LetterBox

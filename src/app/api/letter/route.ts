@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import { LETTER_WRITER_PROMPT } from '@/lib/prompts';
+import { LETTER_WRITER_PROMPT, IMAGE_STYLE_PREFIX, IMAGE_CONSTRAINT_SUFFIX } from '@/lib/prompts';
 
 export const maxDuration = 60;
 
@@ -118,9 +118,20 @@ const FALLBACK_FIRST_LETTER = `陌生的收信人：
 
 林深`;
 
-function buildVideoPrompt(content: string, letterNumber: number): string {
-  const excerpt = content.replace(/\s+/g, ' ').slice(0, 420);
-  return `A ten-second cinematic glimpse sent from the year 2077 with a personal letter. Letter number ${letterNumber}. Visualize one concrete future environment implied by this letter: ${excerpt}. Near-future Chinese city, restrained believable technology, traces of loneliness and human habitation, coherent single scene with a clear beginning and ending, slow camera movement, one consistent person at most, natural anatomy, no duplicate person, no text, no subtitles, no letters, no logos, no watermark.`;
+const FALLBACK_LETTER_SCENES = [
+  'Medium shot, slightly high angle. Lin Shen sits alone at a translucent desk, one hand hovering over a glowing ceramic mailbox, head bowed, eyes soft with hesitation. Dim apartment, holographic city lights through rain-streaked window',
+  'Wide shot, eye-level. Lin Shen stands by a floor-to-ceiling window, back half-turned, one palm pressed against the glass, watching neon reflections ripple in the rain below. Empty apartment behind him, single warm lamp',
+  'Close-up, low angle. Lin Shen crouches beside the ceramic mailbox on a cluttered desk, fingers tracing its rim, brows furrowed with concentration, lips slightly parted. Soft golden glow from the mailbox illuminates his face from below',
+];
+
+const LIN_SHEN_VISUAL = 'Character continuity: 林深: A slim Chinese man in his early thirties from 2077, pale tired face, short slightly untidy black hair, dark reflective eyes, plain graphite-grey future jacket with subtle worn seams.';
+
+function buildLetterImagePrompt(sceneDesc: string): string {
+  return `${IMAGE_STYLE_PREFIX} ${sceneDesc}. Near-future Chinese city, restrained believable technology. ${LIN_SHEN_VISUAL} ${IMAGE_CONSTRAINT_SUFFIX}`;
+}
+
+function fallbackLetterScene(letterNumber: number): string {
+  return FALLBACK_LETTER_SCENES[(letterNumber - 1) % FALLBACK_LETTER_SCENES.length];
 }
 
 export async function POST(req: NextRequest) {
@@ -150,18 +161,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const sceneInstruction = `\n\n写完信件正文后，另起一行输出配图标记：\n[LETTER_SCENE:shot type(close-up/medium/wide) + camera angle + Lin Shen's specific action and facial expression matching this letter's emotional tone + gaze direction(NOT looking at camera) + 2077 environment detail + lighting. 60 words max, English]`;
+
   if (cleanedReply) {
     messages.push({
       role: 'user',
-      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写林深的下一封回信。`,
+      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写林深的下一封回信。${sceneInstruction}`,
     });
   } else if (cleanedHistory.length > 0) {
     messages.push({
       role: 'user',
-      content: `请根据以上完整通信历史，让林深在一段沉默后主动写来下一封信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 可以承接玩家最近一封回信里的具体内容，也可以主动报告2077刚发生的一件小事或追问长安近况。不要假装玩家刚刚又回了信，不要重复之前已经写过的信，不要重新写第一封信。`,
+      content: `请根据以上完整通信历史，让林深在一段沉默后主动写来下一封信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 可以承接玩家最近一封回信里的具体内容，也可以主动报告2077刚发生的一件小事或追问长安近况。不要假装玩家刚刚又回了信，不要重复之前已经写过的信，不要重新写第一封信。${sceneInstruction}`,
     });
   } else {
-    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写第一封信给这位刚到长安的外乡人。` });
+    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写第一封信给这位刚到长安的外乡人。${sceneInstruction}` });
   }
 
   try {
@@ -172,13 +185,18 @@ export async function POST(req: NextRequest) {
       max_tokens: 400,
     });
 
-    const content = response.choices[0]?.message?.content || '';
-    return Response.json({ content, videoPrompt: buildVideoPrompt(content, nextLetterNumber) });
+    const rawContent = response.choices[0]?.message?.content || '';
+    const sceneMatch = rawContent.match(/\[LETTER_SCENE:([^\]]+)\]/i);
+    const content = rawContent.replace(/\[LETTER_SCENE:[^\]]+\]/i, '').trim();
+    const sceneDesc = sceneMatch?.[1]?.trim() || fallbackLetterScene(nextLetterNumber);
+    const imagePrompt = buildLetterImagePrompt(sceneDesc);
+    return Response.json({ content, imagePrompt });
   } catch (err) {
     if (!cleanedReply && cleanedHistory.length === 0) {
+      const imagePrompt = buildLetterImagePrompt(fallbackLetterScene(1));
       return Response.json({
         content: FALLBACK_FIRST_LETTER,
-        videoPrompt: buildVideoPrompt(FALLBACK_FIRST_LETTER, 1),
+        imagePrompt,
         fallback: true,
       });
     }
