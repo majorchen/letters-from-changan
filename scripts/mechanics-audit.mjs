@@ -27,6 +27,17 @@ const checks = [
       && files.game.includes('VIDEO_POLL_INTERVAL_MS = 10_000'),
   },
   {
+    name: 'first mailbox is guaranteed after reaching the inn',
+    pass: files.game.includes('shouldForceFirstMailbox(updated, rawContent)')
+      && files.game.includes("state.chapter !== 'arrival'")
+      && files.game.includes('state.mailbox.discovered'),
+  },
+  {
+    name: 'new journeys do not inject other role saves',
+    pass: files.game.includes('crossLineEchoes: []')
+      && files.prompts.includes('当前旅程必须保持角色与人物独立'),
+  },
+  {
     name: 'followup letters glow in header mailbox',
     pass: files.game.includes('shouldGlowLetterBox')
       && files.game.includes("'等待林深回信'")

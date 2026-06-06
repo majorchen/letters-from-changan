@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
+import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, NarrativeStateUpdate } from '@/lib/gameState';
 import { LetterEntry, LetterVideo, PlayerState, ROLES, VisualProfile } from '@/lib/prompts';
 import { getCloudUserEmail } from '@/lib/cloudSaves';
 import LetterModal from './LetterModal';
@@ -148,6 +148,12 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
   const contradictionOption = getContradictionOption(state);
   const { npc, place, clue } = findContextSubjects(state, context);
   const variant = (state.turnCount || 0) % 3;
+  if (state.chapter === 'arrival' && /(客栈|客房|房间|投宿|安顿|住下|王掌柜)/.test(context)) {
+    return [
+      '请王掌柜安排一间客房',
+      '先把行李放进房里',
+    ];
+  }
 
   if (/(问|询问|追问|打听|告诉|解释|为什么|怎么|何人|是谁|哪里|何处)/.test(playerInput)) {
     const sets = [
@@ -288,6 +294,16 @@ function shouldPrepareActiveLetter(state: PlayerState): boolean {
   const linLetters = state.letterHistory.filter((letter) => letter.from === 'linShen');
   if (linLetters.length === 0) return false;
   return state.turnCount - (state.mailbox.lastGeneratedAtTurn || 0) >= ACTIVE_LETTER_INTERVAL_TURNS;
+}
+
+function shouldForceFirstMailbox(state: PlayerState, content: string): boolean {
+  if (state.mailbox.discovered || state.letterHistory.some((letter) => letter.from === 'linShen')) return false;
+  const context = `${state.location}\n${content}`;
+  return /(客栈|客房|房间|投宿|安顿|住下|陶罐|陶器|邮箱|信匣|发光|金色光|信件|信笺)/.test(context);
+}
+
+function isLetterRelatedOption(option: string): boolean {
+  return /(信件|信笺|邮箱|信匣|查看信|读信|展开信|取出.*信|打开.*信|打开邮|展开.*笺)/.test(option);
 }
 
 function fallbackSceneFromNarrative(state: PlayerState, content: string): string {
@@ -665,7 +681,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     const playerStateForApi = {
       ...gs,
       events: (gs.events || []).filter((event) => !event.startsWith('contradiction_asked:')),
-      crossLineEchoes: getCrossLineEchoes(gs.role),
+      crossLineEchoes: [],
     };
     const apiMessages = [...msgs, userMsg]
       .filter(m => m.role !== 'system')
@@ -719,7 +735,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       }
 
       // 2. Mailbox trigger (from raw)
-      const pendingFirstMailbox = mailboxTriggered || narrativeState?.mailbox === 'pending_first_open';
+      const forcedFirstMailbox = shouldForceFirstMailbox(updated, rawContent);
+      const pendingFirstMailbox = mailboxTriggered
+        || narrativeState?.mailbox === 'pending_first_open'
+        || forcedFirstMailbox;
 
       if (pendingFirstMailbox && !hasDiscoveredMailbox(gs)) {
         updated.chapter = 'mailbox_found';
@@ -732,19 +751,18 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         if (!updated.events.includes('发现邮箱')) {
           updated.events = [...updated.events, '发现邮箱'];
         }
-        assistantMsg.content = cleanContent;
-        const extractedOptions = extractOptions(rawContent);
-        assistantMsg.options = dedupeOptions(
-          extractedOptions.length > 0 ? extractedOptions : fallbackOptions(updated, rawContent, text),
-          msgs,
-        );
+        assistantMsg.content = /(陶器|陶罐|信匣|邮箱|金色光|金光)/.test(cleanContent)
+          ? cleanContent
+          : `${cleanContent}\n\n你刚把行李放稳，客房角落那只唐三彩陶器忽然泛起一层很轻的金光。`;
+        assistantMsg.options = [NEW_LETTER_OPTION];
         onStateChange(updated);
         saveGameState(updated);
         gameStateRef.current = updated;
-        const finalMsgs = [...newMessages, { ...assistantMsg, content: cleanContent, options: assistantMsg.options }];
+        const finalMsgs = [...newMessages, { ...assistantMsg }];
         saveChatHistory(finalMsgs);
         setMessages(finalMsgs);
         setIsStreaming(false);
+        setShowMailbox(true);
         void prepareIncomingLetter(null);
         return;
       }
@@ -983,7 +1001,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           playerState: {
             ...gs,
             events: (gs.events || []).filter((event) => !event.startsWith('contradiction_asked:')),
-            crossLineEchoes: getCrossLineEchoes(gs.role),
+            crossLineEchoes: [],
           },
         }),
       });
@@ -1353,6 +1371,40 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         setShowLetterBox(true);
       }
       return;
+    }
+
+    if (isLetterRelatedOption(option)) {
+      const unreadLetter = findUnreadLetter(currentState);
+      if (unreadLetter) {
+        void openLetter(unreadLetter.id);
+        return;
+      }
+      if (currentState.mailbox.pendingFirstOpen || currentState.mailbox.pending) {
+        setShowLetterBox(true);
+        return;
+      }
+      if (!currentState.mailbox.discovered && !currentState.letterHistory.some((l) => l.from === 'linShen')) {
+        const updated: PlayerState = {
+          ...currentState,
+          chapter: 'mailbox_found',
+          mailbox: {
+            ...currentState.mailbox,
+            discovered: true,
+            pendingFirstOpen: true,
+            unread: [],
+          },
+          events: currentState.events.includes('发现邮箱') ? currentState.events : [...currentState.events, '发现邮箱'],
+        };
+        gameStateRef.current = updated;
+        onStateChange(updated);
+        saveGameState(updated);
+        void prepareIncomingLetter(null);
+        const sysMsg: ChatMessage = { role: 'system', content: '📮 信匣泛起金光……', timestamp: Date.now() };
+        const newMsgs = [...messagesRef.current, sysMsg];
+        setMessages(newMsgs);
+        saveChatHistory(newMsgs);
+        return;
+      }
     }
 
     const contradictionEvent = findContradictionEventByOption(gameStateRef.current, option);
