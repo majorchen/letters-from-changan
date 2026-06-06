@@ -117,9 +117,9 @@ const FALLBACK_FIRST_LETTER = `陌生的收信人：
 林深`;
 
 const FALLBACK_LETTER_SCENES = [
-  'Medium shot, slightly high angle. Lin Shen sits alone at a translucent desk, one hand hovering over a glowing ceramic mailbox, head bowed, eyes soft with hesitation. Dim apartment, holographic city lights through rain-streaked window',
-  'Wide shot, eye-level. Lin Shen stands by a floor-to-ceiling window, back half-turned, one palm pressed against the glass, watching neon reflections ripple in the rain below. Empty apartment behind him, single warm lamp',
-  'Close-up, low angle. Lin Shen crouches beside the ceramic mailbox on a cluttered desk, fingers tracing its rim, brows furrowed with concentration, lips slightly parted. Soft golden glow from the mailbox illuminates his face from below',
+  'Medium shot, slightly high angle. Lin Shen sits alone at a translucent desk, one hand hovering over a glowing ceramic mailbox, head bowed, eyes soft with hesitation. Dim apartment, muted blue-grey tones, quiet solitude',
+  'Wide shot, eye-level. Lin Shen stands by a floor-to-ceiling window, back half-turned, one palm pressed against the glass. Empty apartment behind him, cool evening atmosphere, distant city silhouette',
+  'Close-up, low angle. Lin Shen crouches beside the ceramic mailbox on a cluttered desk, fingers tracing its rim, brows furrowed with concentration, lips slightly parted. Warm amber tones, intimate quiet mood',
 ];
 
 const LIN_SHEN_VISUAL = 'Character continuity: 林深: A slim Chinese man in his early thirties from 2077, pale tired face, short slightly untidy black hair, dark reflective eyes, plain graphite-grey future jacket with subtle worn seams.';

@@ -32,14 +32,14 @@ const ROLE_SCENES: Record<string, string> = {
 };
 
 const LOCATION_KEYWORDS = [
-  { keyword: '西市', scene: 'Tang Dynasty West Market bazaar, crowded stalls with silk fabrics spices and pottery, Persian and Chinese merchants trading, warm lantern light, bustling energy' },
-  { keyword: '东市', scene: 'Tang Dynasty East Market, elegant shops with jade calligraphy and luxury goods, scholars and nobles browsing, morning sunlight through wooden eaves' },
-  { keyword: '客栈', scene: 'Interior of a Tang Dynasty inn room, warm candlelight, wooden furniture, silk curtains, a mysterious ceramic mailbox glowing faintly in the corner' },
-  { keyword: '酒肆', scene: 'Tang Dynasty wine house interior, warm amber light, patrons drinking and laughing, a musician playing pipa in the corner, steam rising from hot dishes' },
-  { keyword: '城门', scene: 'Tang Dynasty Chang an Zhuque Gate at golden hour, massive city walls, guards in armor, stream of travelers entering, warm sunset light' },
-  { keyword: '朱雀大街', scene: 'Tang Dynasty Zhuque Avenue, wide grand boulevard stretching to the horizon, crowds of people in colorful Tang robes, horse carriages, willow trees lining the road' },
-  { keyword: '道观', scene: 'A quiet Taoist temple in Tang Dynasty Chang an, incense smoke curling upward, ancient cypress trees, a priest sweeping stone steps in golden afternoon light' },
-  { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an at dusk, narrow alleys between courtyard houses, children playing, the smell of cooking, warm lanterns being lit' },
+  { keyword: '西市', scene: 'Tang Dynasty West Market bazaar, crowded stalls with silk fabrics spices and pottery, Persian and Chinese merchants trading, warm amber atmosphere, bustling energy' },
+  { keyword: '东市', scene: 'Tang Dynasty East Market, elegant shops with jade calligraphy and luxury goods, scholars and nobles browsing, soft morning tones, wooden eaves' },
+  { keyword: '客栈', scene: 'Interior of a Tang Dynasty inn room, wooden furniture, silk curtains, a mysterious ceramic mailbox in the corner, warm muted tones, quiet solitude' },
+  { keyword: '酒肆', scene: 'Tang Dynasty wine house interior, patrons drinking and laughing, a musician playing pipa in the corner, warm amber atmosphere, lively mood' },
+  { keyword: '城门', scene: 'Tang Dynasty Chang an Zhuque Gate, massive city walls, guards in armor, stream of travelers entering, warm golden atmosphere' },
+  { keyword: '朱雀大街', scene: 'Tang Dynasty Zhuque Avenue, wide grand boulevard, crowds of people in colorful Tang robes, horse carriages, willow trees lining the road' },
+  { keyword: '道观', scene: 'A quiet Taoist temple in Tang Dynasty Chang an, ancient cypress trees, a priest sweeping stone steps, serene atmosphere, muted green and amber tones' },
+  { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an, narrow alleys between courtyard houses, children playing, warm evening atmosphere, domestic tranquility' },
 ];
 
 const GAME_URL = 'https://letterstang.aifisher.cn';
@@ -272,11 +272,6 @@ function sanitizeResponse(raw: string, state: PlayerState): string {
       content = content.slice(0, cutAt + periodIdx + 1);
     }
   }
-  if ([...content].length > 500) {
-    const truncated = [...content].slice(0, 500).join('');
-    const lastPeriod = Math.max(truncated.lastIndexOf('。'), truncated.lastIndexOf('」'));
-    if (lastPeriod > 200) content = truncated.slice(0, lastPeriod + 1);
-  }
   void state;
   return content;
 }
@@ -302,15 +297,16 @@ function sanitizeState(parsed: NarrativeStateUpdate, playerState: PlayerState): 
   return parsed;
 }
 
-function fallbackSceneFromNarrative(state: PlayerState, content: string): string {
-  const role = ROLES[state.role]?.name || '旅人';
-  const excerpt = content.replace(/\s+/g, ' ').slice(0, 180);
-  return `Tang Dynasty Chang an, ${state.location}, a ${role} in the current story moment: ${excerpt}, cinematic narrative scene, warm historical atmosphere`;
-}
 
 function visualProfilesForScene(state: PlayerState, content: string): string {
+  const knownNpcs = state.knownNPCs || [];
   const profiles = Object.entries(state.visualProfiles || {})
-    .filter(([key, profile]) => key === state.role || content.includes(profile.name) || content.includes(key))
+    .filter(([key, profile]) =>
+      key === state.role
+      || content.includes(profile.name)
+      || content.includes(key)
+      || knownNpcs.some(npc => npc === key || npc === profile.name),
+    )
     .slice(0, 4)
     .map(([, profile]) => `${profile.name}: ${profile.description}`);
   return profiles.length > 0 ? ` Character continuity: ${profiles.join(' ')}` : '';
@@ -704,10 +700,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           }
         }
         if (!usedKeywordFallback) {
-          const fallbackScene = fallbackSceneFromNarrative(updated, cleanContent);
-          generateSceneImage(
-            IMAGE_STYLE_PREFIX + ' ' + fallbackScene + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-          );
+          // No [SCENE:] tag and no location keyword match — keep current image
         }
       }
 
@@ -1156,6 +1149,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
+  const lastGoodImageRef = useRef<string | null>(null);
+
   async function generateSceneImage(scene: string) {
     setImageLoading(true);
     try {
@@ -1166,10 +1161,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       });
       const data = await res.json();
       if (data.url) {
+        lastGoodImageRef.current = data.url;
         setSceneImage(data.url);
         persistLatestSceneImage(data.url);
       }
-    } catch { /* silently fail */ }
+    } catch { /* silently fail — keep current image */ }
     setImageLoading(false);
   }
 
@@ -1311,7 +1307,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             sizes="100vw"
             unoptimized
             className="object-cover opacity-50 transition-opacity duration-1000"
-            onError={() => setSceneImage(null)}
+            onError={() => setSceneImage(lastGoodImageRef.current)}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
         </div>

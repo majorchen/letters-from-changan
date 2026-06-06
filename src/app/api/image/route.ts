@@ -48,9 +48,9 @@ export async function POST(req: NextRequest) {
   try {
     let response;
     try {
-      response = await generateImage('agnes-image-2.1-flash', prompt);
+      response = await generateImage('agnes-image-2.0-flash', prompt);
     } catch (error) {
-      console.warn('[image-generation] Agnes Image 2.1 failed, falling back to 2.0', error);
+      console.warn('[image-generation] Agnes Image 2.0 failed, retrying', error);
       response = await generateImage('agnes-image-2.0-flash', prompt);
     }
 
