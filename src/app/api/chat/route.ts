@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { buildSystemPrompt, PlayerState, ROLES, getMailboxState, getStoryPhase, getStoryTime, STORY_PERIODS } from '@/lib/prompts';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 type ClientMessage = {
   role: string;
@@ -62,6 +63,9 @@ const client = new OpenAI({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = checkRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   if (!process.env.AGNES_API_KEY) {
     return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
   }

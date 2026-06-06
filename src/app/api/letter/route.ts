@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { LETTER_WRITER_PROMPT, IMAGE_STYLE_PREFIX, IMAGE_CONSTRAINT_SUFFIX } from '@/lib/prompts';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const maxDuration = 60;
 
@@ -122,7 +123,7 @@ const FALLBACK_LETTER_SCENES = [
   'Close-up, low angle. Lin Shen crouches beside the ceramic mailbox on a cluttered desk, fingers tracing its rim, brows furrowed with concentration, lips slightly parted. Warm amber tones, intimate quiet mood',
 ];
 
-const LIN_SHEN_VISUAL = 'Character continuity: 林深: A slim Chinese man in his early thirties from 2077, pale tired face, short slightly untidy black hair, dark reflective eyes, plain graphite-grey future jacket with subtle worn seams.';
+const LIN_SHEN_VISUAL = 'Character continuity: 林深: A slim Chinese man in his early thirties from 2077, tired face, short slightly untidy black hair, quiet dark eyes, plain graphite-grey future jacket with subtle worn seams.';
 
 function buildLetterImagePrompt(sceneDesc: string): string {
   return `${IMAGE_STYLE_PREFIX} ${sceneDesc}. Near-future Chinese city, restrained believable technology. ${LIN_SHEN_VISUAL} ${IMAGE_CONSTRAINT_SUFFIX}`;
@@ -133,6 +134,9 @@ function fallbackLetterScene(letterNumber: number): string {
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimited = checkRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   if (!process.env.AGNES_API_KEY) {
     return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
   }

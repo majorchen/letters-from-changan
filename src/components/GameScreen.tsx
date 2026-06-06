@@ -763,16 +763,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const finalMessages = [...newMessages, { ...assistantMsg, content: cleanContent, options: opts }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
+      setIsStreaming(false);
       if (shouldPrepareActiveLetter(updated)) {
         window.setTimeout(() => void prepareIncomingLetter(null), 500);
       }
     } catch (err) {
       assistantMsg.content = '（长安城的喧嚣声突然安静了一瞬...请再试一次）';
       setMessages([...newMessages, assistantMsg]);
+      setIsStreaming(false);
       console.error(err);
     }
-
-    setIsStreaming(false);
   }
 
   async function openLetter(letterId?: string) {
@@ -855,7 +855,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     saveGameState(updated);
   }
 
-  async function prepareIncomingLetter(playerReply: string | null) {
+  async function prepareIncomingLetter(playerReply: string | null, retryCount = 0) {
     if (preparingLetterRef.current || gameStateRef.current.mailbox.pending) return;
     preparingLetterRef.current = true;
     try {
@@ -908,6 +908,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       await finishIncomingLetter(id, data.content, image);
     } catch (error) {
       console.error('[incoming-letter]', error);
+      if (retryCount < 1) {
+        preparingLetterRef.current = false;
+        await new Promise(r => setTimeout(r, 3000));
+        return prepareIncomingLetter(playerReply, retryCount + 1);
+      }
+      setSaveToast('林深还在写信...请稍后再试');
+      setTimeout(() => setSaveToast(''), 4000);
     } finally {
       preparingLetterRef.current = false;
     }

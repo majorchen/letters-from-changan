@@ -117,10 +117,10 @@ export const CORE_VISUAL_PROFILES: Record<string, string> = {
   wanderer: 'A weathered Chinese wanderer around thirty, angular face, small scar through the left eyebrow, black hair in a high knot, charcoal Tang travel robe, short saber with a worn lacquered sheath.',
   scholar: 'A slender Chinese scholar in his late twenties, pale warm complexion, straight brows, thoughtful dark eyes, black hair under a simple cloth headpiece, ivory Tang robe with an ink-blue outer layer.',
   王掌柜: 'A broad middle-aged Chinese innkeeper, round friendly face, short greying beard, lively eyes, dark ochre Tang robe, brown apron, wooden tally slips at his belt.',
-  阿依: 'A young Persian woman with olive skin, large dark eyes, thick wavy black hair partly covered by a teal silk scarf, crimson and turquoise Tang-Persian dress, small silver earrings.',
-  李无名: 'A thin elderly Chinese fortune teller, deeply lined face, long sparse white beard, one cloudy eye, faded grey Taoist robe, bamboo divination tube in hand.',
-  守门兵: 'A sturdy young Chinese gate guard, square jaw, sun-browned skin, tied black hair, dark lamellar Tang armor, red cloth scarf, wooden tally at his waist.',
-  林深: 'A slim Chinese man in his early thirties from 2077, pale tired face, short slightly untidy black hair, dark reflective eyes, plain graphite-grey future jacket with subtle worn seams.',
+  阿依: 'A young Persian woman, large dark eyes, wavy black hair partly covered by a teal silk scarf, crimson and turquoise Tang-Persian dress, small silver earrings.',
+  李无名: 'A thin elderly Chinese fortune teller, gaunt face, long sparse white beard, clouded left eye, faded grey Taoist robe, bamboo divination tube in hand.',
+  守门兵: 'A sturdy young Chinese gate guard, square jaw, tanned complexion, tied black hair, dark lamellar Tang armor, red cloth scarf, wooden tally at his waist.',
+  林深: 'A slim Chinese man in his early thirties from 2077, tired face, short slightly untidy black hair, quiet dark eyes, plain graphite-grey future jacket with subtle worn seams.',
 };
 
 export const ROLES: Record<string, { name: string; desc: string; emoji: string }> = {
@@ -167,7 +167,7 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
 ## 人物视觉档案
 ${visualProfiles}
 场景镜头中如果出现上述人物，必须逐字遵守其身份特征，不得改变年龄、脸型、发型、服装主色或标志物。
-每轮回复中出现的所有命名人物（含玩家角色、已知NPC、新角色），都必须在 [STATE] 的 VISUAL_PROFILE 写一条稳定、具体、英文的外貌描述，包含族裔或地域、年龄、脸型、肤色、发型、服装主色和一个标志物。新角色首次出场必须写。已有角色重复出场也建议写，确保场景图角色外形一致。未命名的路人只需在 SCENE 里写清楚，不要误套用已有 NPC 外貌。
+每轮回复中出现的所有命名人物（含玩家角色、已知NPC、新角色），都必须在 [STATE] 的 VISUAL_PROFILE 写一条稳定、具体、英文的外貌描述，包含地域背景、年龄段、体型轮廓、发型、服装主色和一个标志物。描述用绘画语言（如 gaunt face, broad shoulders, tanned complexion），避免写实摄影词汇（如 pores, skin texture, reflective eyes, deeply lined）。新角色首次出场必须写。已有角色重复出场也建议写，确保场景图角色外形一致。未命名的路人只需在 SCENE 里写清楚，不要误套用已有 NPC 外貌。
 
 ## 最近书信上下文
 ${recentLetters}

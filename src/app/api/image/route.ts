@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { IMAGE_PROMPT_SUFFIX } from '@/lib/prompts';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const maxDuration = 60;
 
@@ -32,6 +33,9 @@ async function generateImage(model: string, prompt: string): Promise<AgnesImageR
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimited = checkRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   if (!process.env.AGNES_API_KEY) {
     return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
   }

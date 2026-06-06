@@ -1,10 +1,10 @@
 # Letters from Chang'an - 优化计划
 
 > 2026-06-06 创建 · 按 Phase 执行，每个 Task 独立可交付
-> 最后更新：2026-06-06 21:30
+> 最后更新：2026-06-07 01:30
 > 状态标记：⬜ 待做 · 🔄 进行中 · ✅ 完成
 >
-> **进度概览：Phase 1-4 ✅ 全部完成 | Phase 5 ⬜ 待做 | Phase 6 部分完成 | Phase 7 部分完成 | 补充 Task ✅**
+> **进度概览：Phase 1-4 ✅ 全部完成 | Phase 5 ⬜ 待做（推后） | Phase 6 3/6 完成 | Phase 7 3/8 完成 | 补充 Task ✅**
 
 ---
 
@@ -160,7 +160,7 @@ function fallbackLetterScene(letterNumber: number): string {
 
 ---
 
-### Task 2.5 ⬜ (使用占位图 /images/linshen-first-letter.webp，需后续生成) 生成预置首封信图片
+### Task 2.5 ✅ 生成预置首封信图片
 
 用 Agnes Image 生成一张2077投信机场景图：
 - prompt: `{IMAGE_STYLE_PREFIX} Wide shot, eye-level. A glowing ceramic mailbox sits on a translucent desk in a dim near-future apartment. Soft golden light emanates from inside the mailbox, illuminating scattered handwritten letters around it. Holographic city skyline visible through a rain-streaked window behind. Quiet, intimate, a bridge between two eras. {IMAGE_CONSTRAINT_SUFFIX}`
@@ -413,7 +413,7 @@ src/components/
 
 ## Phase 6：可靠性与安全（1-2天）
 
-### Task 6.1 ⬜ API 路由保护
+### Task 6.1 ✅ API 路由保护
 
 **文件**：新建 `src/middleware.ts`（Next.js Middleware）
 
@@ -453,7 +453,7 @@ src/components/
 
 ---
 
-### Task 6.5 ⬜ 信件系统容错
+### Task 6.5 ✅ 信件系统容错
 
 **改法**：
 - `/api/letter` 加 1 次自动重试（间隔 3 秒）
@@ -510,9 +510,9 @@ src/components/
 
 ---
 
-### Task 7.7 ⬜ PWA 决策
+### Task 7.7 ✅ PWA 决策
 
-**改法**：要么加 next-pwa 实现离线 fallback，要么去掉 manifest 中的 PWA 声明。
+**决策**：保持 manifest 不变（支持移动端"添加到主屏幕"全屏体验），不加 service worker（游戏必须在线调用 Agnes API，离线无意义）。
 
 ---
 
@@ -542,9 +542,14 @@ src/components/
 | **Phase 2** | 信件视频→图片 | 1-2小时 | ✅ 完成 | 信件系统从卡5分钟变成10秒 |
 | **Phase 3** | 场景图镜头感 | 30分钟 | ✅ 完成 | 画面从摆拍变电影感 |
 | **Phase 4** | 代码防护层 | 1-2小时 | ✅ 完成 | prompt 规则不再脆弱 |
-| **Phase 5** | 架构重构 | 2-3天 | ⬜ 待做 | 1600行→300行，可维护 |
-| **Phase 6** | 可靠性与安全 | 1-2天 | 🔄 1/6 完成 | API 保护 + 容错 + 数据安全 |
-| **Phase 7** | 体验打磨 | 1天 | 🔄 2/8 完成 | 传播、无障碍、代码整洁 |
+| **Phase 5** | 架构重构 | 2-3天 | ⬜ 推后 | 1600行→300行，可维护 |
+| **Phase 6** | 可靠性与安全 | 1-2天 | 🔄 3/6 完成 | API 保护 + 容错 + 数据安全 |
+| **Phase 7** | 体验打磨 | 1天 | 🔄 3/8 完成 | 传播、无障碍、代码整洁 |
 | **补充** | 场景图清理 | 15分钟 | ✅ 完成 | 防 localStorage 膨胀 |
 
-**下一步推荐**：Phase 6.1（API rate limit）→ Phase 5.1（prompts.ts 拆分）→ Phase 5.3（normalize 去重）→ 其余按需
+**已完成补充修复（2026-06-07）**：
+- 选项按钮不显示：`setIsStreaming(false)` 提前到 `setMessages` 之后同批渲染
+- NPC 画风写实问题：去除 CORE_VISUAL_PROFILES 和 VISUAL_PROFILE 指令中的写实描述词
+- API IP 级 rate limit（20次/分钟，内存 Map，无外部依赖）
+- 信件系统容错（1次自动重试 + 失败 UI 提示"林深还在写信..."）
+- 角色场景图全部用 Agnes 2.0 重制 + 全局画风统一（去除写实光影描述）
