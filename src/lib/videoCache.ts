@@ -1,6 +1,6 @@
 const VIDEO_CACHE_KEY = 'letters-from-changan-video-cache-v1';
 
-export type VideoEventType = 'memory' | 'glitch' | 'ending';
+export type VideoEventType = 'letter' | 'memory' | 'glitch' | 'ending';
 
 export interface VideoAsset {
   key: string;
@@ -8,6 +8,7 @@ export interface VideoAsset {
   status: 'queued' | 'ready' | 'failed';
   prompt: string;
   taskId?: string;
+  videoId?: string;
   url?: string;
   urls?: string[];
   createdAt: number;

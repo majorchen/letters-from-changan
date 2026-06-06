@@ -1,4 +1,4 @@
-import { PlayerState, INITIAL_STATE, getMailboxState, advanceStoryTime, getStoryPhase, NpcMemory } from './prompts';
+import { PlayerState, INITIAL_STATE, getMailboxState, advanceStoryTime, CORE_VISUAL_PROFILES, getStoryPhase, LetterEntry, NpcMemory, VisualProfile } from './prompts';
 
 const LEGACY_STORAGE_KEY = 'letters-from-changan-state';
 const LEGACY_HISTORY_KEY = 'letters-from-changan-history';
@@ -75,6 +75,38 @@ function makeId(): string {
   return `save-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function fallbackVisualProfile(name: string): VisualProfile {
+  const variants = [
+    'a narrow face, steady dark eyes, black hair in a low Tang topknot, muted blue-grey Tang robe, plain hemp belt',
+    'a round face, warm brown skin, alert dark eyes, black hair tied with a wooden pin, dark green Tang robe, cloth shoulder bag',
+    'an angular face, sun-touched skin, straight brows, black hair beneath a simple headcloth, brown Tang robe, worn leather belt',
+  ];
+  const hash = Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return {
+    name,
+    description: `A named Tang Dynasty Chinese character with ${variants[hash % variants.length]}. Keep this exact appearance whenever ${name} returns.`,
+    createdAt: Date.now(),
+  };
+}
+
+function ensureVisualProfiles(state: PlayerState): Record<string, VisualProfile> {
+  const profiles = { ...(state.visualProfiles || {}) };
+  const roleDescription = CORE_VISUAL_PROFILES[state.role];
+  if (roleDescription && !profiles[state.role]) {
+    profiles[state.role] = { name: '玩家', description: roleDescription, createdAt: Date.now() };
+  }
+  for (const name of state.knownNPCs || []) {
+    if (!profiles[name]) {
+      profiles[name] = {
+        name,
+        description: CORE_VISUAL_PROFILES[name] || fallbackVisualProfile(name).description,
+        createdAt: Date.now(),
+      };
+    }
+  }
+  return profiles;
+}
+
 export function loadSaves(): GameSave[] {
   if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem(SAVES_KEY);
@@ -103,7 +135,16 @@ function clearLegacyStorage(): void {
 function normalizePlayerState(state: PlayerState): PlayerState {
   const mailbox = getMailboxState(state);
   const storyPhase = state.storyPhase || getStoryPhase(state).phase;
-  return {
+  const letterHistory: LetterEntry[] = (Array.isArray(state.letterHistory) ? state.letterHistory : [])
+    .filter((letter) => letter && typeof letter.content === 'string')
+    .map((letter, index) => ({
+      ...letter,
+      id: letter.id || `legacy-letter-${letter.timestamp || Date.now()}-${index}`,
+      from: letter.from === 'player' ? 'player' : 'linShen',
+      timestamp: letter.timestamp || Date.now(),
+      readAt: letter.from === 'player' ? (letter.readAt || letter.timestamp || Date.now()) : letter.readAt,
+    }));
+  const normalized = {
     ...state,
     knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs : [],
     events: Array.isArray(state.events) ? state.events : [],
@@ -116,12 +157,18 @@ function normalizePlayerState(state: PlayerState): PlayerState {
     awaitingFreeInput: Boolean(state.awaitingFreeInput),
     freeInputCount: state.freeInputCount || 0,
     lastFreeInputTurn: state.lastFreeInputTurn || 0,
-    letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory : [],
-    mailbox,
+    letterHistory,
+    mailbox: {
+      ...mailbox,
+      unread: Array.isArray(mailbox.unread) ? mailbox.unread : [],
+    },
+    visualProfiles: state.visualProfiles && typeof state.visualProfiles === 'object' ? state.visualProfiles : {},
     turnCount: state.turnCount || 0,
     actionsToday: state.actionsToday || 0,
     lastPlayDate: state.lastPlayDate || new Date().toISOString().split('T')[0],
   };
+  normalized.visualProfiles = ensureVisualProfiles(normalized);
+  return normalized;
 }
 
 export function normalizeGameSave(save: GameSave): GameSave {
@@ -337,7 +384,6 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
         ...updated.mailbox,
         discovered: true,
         pendingFirstOpen: true,
-        unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
       };
       addEvent('发现邮箱');
     } else {
@@ -346,15 +392,6 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
         updated.knownNPCs = [...updated.knownNPCs, '王掌柜'];
       }
     }
-  }
-
-  if (!narrativeState && state.chapter === 'mailbox_found' && content.includes('信')) {
-    updated.chapter = 'first_letter_read';
-    updated.mailbox = {
-      ...updated.mailbox,
-      pendingFirstOpen: false,
-      unread: [],
-    };
   }
 
   if (!narrativeState?.npcs && content.includes('阿依')) {
@@ -390,6 +427,7 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
       updated.knownNPCs = [...updated.knownNPCs, npc.slice(0, 40)];
     }
   }
+  updated.visualProfiles = ensureVisualProfiles(updated);
   for (const event of narrativeState?.events || []) {
     if (event && event !== 'none') addEvent(event.slice(0, 60));
   }
@@ -444,21 +482,17 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
       ...updated.mailbox,
       discovered: true,
       pendingFirstOpen: true,
-      unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
     };
   } else if (narrativeState?.mailbox === 'unread') {
     updated.mailbox = {
       ...updated.mailbox,
       discovered: true,
-      unread: updated.mailbox.unread.length > 0 ? updated.mailbox.unread : [{ id: `letter-${Date.now()}`, from: 'linShen', createdAt: Date.now() }],
-      lastGeneratedAtTurn: updated.turnCount,
     };
   } else if (narrativeState?.mailbox === 'quiet') {
     updated.mailbox = {
       ...updated.mailbox,
       discovered: true,
       pendingFirstOpen: false,
-      unread: [],
     };
   }
   return updated;

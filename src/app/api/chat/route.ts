@@ -49,6 +49,7 @@ function normalizePlayerState(value: unknown): PlayerState | null {
     lastFreeInputTurn: Number.isFinite(state.lastFreeInputTurn) ? Number(state.lastFreeInputTurn) : 0,
     mailbox,
     letterHistory: Array.isArray(state.letterHistory) ? state.letterHistory.slice(-12) as PlayerState['letterHistory'] : [],
+    visualProfiles: state.visualProfiles && typeof state.visualProfiles === 'object' ? state.visualProfiles : {},
     turnCount: Number.isFinite(state.turnCount) ? Number(state.turnCount) : 0,
     actionsToday: 0,
     lastPlayDate: typeof state.lastPlayDate === 'string' ? state.lastPlayDate : new Date().toISOString().split('T')[0],

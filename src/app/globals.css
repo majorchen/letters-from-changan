@@ -83,6 +83,15 @@ body {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
+@keyframes mailbox-soft-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.35)); }
+  50% { filter: drop-shadow(0 0 9px rgba(251, 191, 36, 0.8)); }
+}
+
+.mailbox-soft-glow {
+  animation: mailbox-soft-glow 2.2s ease-in-out infinite;
+}
+
 @keyframes typing-dot {
   0%, 60%, 100% { opacity: 0.2; }
   30% { opacity: 1; }

@@ -7,13 +7,18 @@ const files = {
   layout: await readFile(new URL('../src/app/layout.tsx', import.meta.url), 'utf8'),
   globals: await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8'),
   video: await readFile(new URL('../src/app/api/video/route.ts', import.meta.url), 'utf8'),
+  letter: await readFile(new URL('../src/app/api/letter/route.ts', import.meta.url), 'utf8'),
+  letterVideo: await readFile(new URL('../src/components/LetterVideo.tsx', import.meta.url), 'utf8'),
+  ending: await readFile(new URL('../src/components/EndingSequence.tsx', import.meta.url), 'utf8'),
   start: await readFile(new URL('../src/components/StartScreen.tsx', import.meta.url), 'utf8'),
 };
 
 const checks = [
   {
-    name: 'followup letter cooldown is 25-30 turns',
-    pass: /REPLY_LETTER_COOLDOWN_TURNS\s*=\s*(2[5-9]|30)\b/.test(files.game),
+    name: 'followup letter preparation starts after player reply',
+    pass: files.game.includes('prepareIncomingLetter(reply)')
+      && files.game.includes('VIDEO_POLL_MAX_ATTEMPTS = 30')
+      && files.game.includes('VIDEO_POLL_INTERVAL_MS = 10_000'),
   },
   {
     name: 'followup letters glow in header mailbox',
@@ -34,15 +39,25 @@ const checks = [
       && files.prompts.includes('本线啊哈时刻'),
   },
   {
-    name: 'video remains placeholder-gated',
-    pass: files.prompts.includes('VISUAL: none / glitch / memory / ending') && files.game.includes("setVisualCue(narrativeState.visualCue)"),
+    name: 'random narrative videos are removed and endings use text scenes',
+    pass: files.prompts.includes('VISUAL: none / ending')
+      && !files.game.includes('记忆影像生成中')
+      && files.ending.includes('MajorChen | AI Fisher'),
   },
   {
     name: 'Agnes video v2 route is configured',
     pass: files.video.includes("DEFAULT_VIDEO_MODEL = 'agnes-video-v2.0'")
       && files.video.includes('/videos')
+      && files.video.includes('/agnesapi?video_id=')
+      && files.video.includes('remixed_from_video_id')
       && files.video.includes('num_frames')
       && files.video.includes('frame_rate'),
+  },
+  {
+    name: 'every incoming letter is paired with an inline video',
+    pass: files.letter.includes('videoPrompt')
+      && files.game.includes("type: 'letter'")
+      && files.letterVideo.includes('playsInline'),
   },
   {
     name: 'cloud saves are optional and Supabase-backed',

@@ -6,6 +6,7 @@ export const maxDuration = 60;
 type AgnesVideoCreateResponse = {
   id?: string;
   task_id?: string;
+  video_id?: string;
   status?: string;
   url?: string;
   video_url?: string;
@@ -14,6 +15,7 @@ type AgnesVideoCreateResponse = {
   data?: {
     id?: string;
     task_id?: string;
+    video_id?: string;
     status?: string;
     url?: string;
     video_url?: string;
@@ -52,6 +54,10 @@ function getBaseUrl(): string {
   return (process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1').replace(/\/$/, '');
 }
 
+function getGatewayOrigin(): string {
+  return getBaseUrl().replace(/\/v1$/, '');
+}
+
 function getVideoModel(): string {
   return process.env.AGNES_VIDEO_MODEL || DEFAULT_VIDEO_MODEL;
 }
@@ -79,6 +85,10 @@ function extractTaskId(data: AgnesVideoCreateResponse): string {
   return data.task_id || data.id || data.data?.task_id || data.data?.id || '';
 }
 
+function extractVideoId(data: AgnesVideoCreateResponse): string {
+  return data.video_id || data.data?.video_id || '';
+}
+
 function extractVideoUrl(data: AgnesVideoStatusResponse): string {
   const candidates = [
     typeof data.output === 'string' ? data.output : '',
@@ -86,10 +96,29 @@ function extractVideoUrl(data: AgnesVideoStatusResponse): string {
     data.url,
     data.data?.video_url,
     data.data?.url,
+    data.remixed_from_video_id,
+    data.data?.remixed_from_video_id,
     data.output && typeof data.output === 'object' ? data.output.video_url : '',
     data.output && typeof data.output === 'object' ? data.output.url : '',
   ];
   return candidates.find((item) => typeof item === 'string' && item.startsWith('http')) || '';
+}
+
+function normalizeVideoResponse(value: unknown): AgnesVideoStatusResponse {
+  if (Array.isArray(value)) {
+    return normalizeVideoResponse(value[0]);
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.data)) {
+      return {
+        ...(record as AgnesVideoStatusResponse),
+        data: normalizeVideoResponse(record.data[0]),
+      };
+    }
+    return record as AgnesVideoStatusResponse;
+  }
+  return {};
 }
 
 function cleanAssetKey(value: unknown, fallback: string): string {
@@ -105,7 +134,7 @@ async function findStoredAsset(key: string) {
   if (!supabase) return null;
   const { data } = await supabase
     .from('video_assets')
-    .select('key,type,status,prompt,task_id,public_url,segment_index,created_at,updated_at')
+    .select('key,type,status,prompt,task_id,video_id,public_url,segment_index,created_at,updated_at')
     .eq('key', key)
     .eq('status', 'ready')
     .maybeSingle();
@@ -117,6 +146,7 @@ async function persistVideoAsset(params: {
   type: string;
   prompt: string;
   taskId?: string;
+  videoId?: string;
   sourceUrl: string;
   segmentIndex: number;
 }) {
@@ -151,6 +181,7 @@ async function persistVideoAsset(params: {
       status: 'ready',
       prompt: params.prompt,
       task_id: params.taskId || null,
+      video_id: params.videoId || null,
       source_url: params.sourceUrl,
       storage_path: storagePath,
       public_url: publicUrl,
@@ -160,6 +191,30 @@ async function persistVideoAsset(params: {
     }, { onConflict: 'key' });
 
   return { publicUrl, persisted: true };
+}
+
+async function persistQueuedAsset(params: {
+  key: string;
+  type: string;
+  prompt: string;
+  taskId?: string;
+  videoId?: string;
+  segmentIndex: number;
+}) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return;
+  const now = Date.now();
+  await supabase.from('video_assets').upsert({
+    key: params.key,
+    type: params.type,
+    status: 'queued',
+    prompt: params.prompt,
+    task_id: params.taskId || null,
+    video_id: params.videoId || null,
+    segment_index: params.segmentIndex,
+    created_at: now,
+    updated_at: now,
+  }, { onConflict: 'key' });
 }
 
 export async function POST(req: NextRequest) {
@@ -174,15 +229,16 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Missing prompt' }, { status: 400 });
   }
   const assetKey = cleanAssetKey(payload.key, `video:${Date.now()}`);
-  const eventType = payload.type === 'glitch' || payload.type === 'memory' || payload.type === 'ending'
+  const eventType = payload.type === 'letter' || payload.type === 'glitch' || payload.type === 'memory' || payload.type === 'ending'
     ? payload.type
-    : 'memory';
+    : 'letter';
   const segmentIndex = Number.isFinite(Number(payload.segmentIndex)) ? Math.max(0, Math.floor(Number(payload.segmentIndex))) : 0;
 
   const stored = await findStoredAsset(assetKey);
   if (stored?.public_url) {
     return Response.json({
       taskId: stored.task_id || '',
+      videoId: stored.video_id || '',
       status: 'ready',
       progress: 1,
       url: stored.public_url,
@@ -228,23 +284,37 @@ export async function POST(req: NextRequest) {
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    const data = await response.json().catch(async () => ({ error: await response.text() })) as AgnesVideoCreateResponse;
+    const data = normalizeVideoResponse(await response.json().catch(async () => ({ error: await response.text() })));
     if (!response.ok) {
       return Response.json({ error: data }, { status: response.status });
     }
     const sourceUrl = extractVideoUrl(data);
+    const taskId = extractTaskId(data);
+    const videoId = extractVideoId(data);
+    if (!sourceUrl) {
+      await persistQueuedAsset({
+        key: assetKey,
+        type: eventType,
+        prompt: cleanedPrompt,
+        taskId,
+        videoId,
+        segmentIndex,
+      });
+    }
     const persisted = sourceUrl
       ? await persistVideoAsset({
         key: assetKey,
         type: eventType,
         prompt: cleanedPrompt,
-        taskId: extractTaskId(data),
+        taskId,
+        videoId,
         sourceUrl,
         segmentIndex,
       })
       : { publicUrl: sourceUrl, persisted: false };
     return Response.json({
-      taskId: extractTaskId(data),
+      taskId,
+      videoId,
       status: data.status || data.data?.status || 'queued',
       progress: data.progress ?? data.data?.progress ?? 0,
       url: persisted.publicUrl,
@@ -265,6 +335,7 @@ export async function GET(req: NextRequest) {
   }
 
   const taskId = req.nextUrl.searchParams.get('taskId') || req.nextUrl.searchParams.get('id');
+  const videoId = req.nextUrl.searchParams.get('videoId') || '';
   const assetKey = cleanAssetKey(req.nextUrl.searchParams.get('key'), taskId || `video:${Date.now()}`);
   const eventType = req.nextUrl.searchParams.get('type') || 'memory';
   const prompt = req.nextUrl.searchParams.get('prompt') || '';
@@ -275,6 +346,7 @@ export async function GET(req: NextRequest) {
   if (stored?.public_url) {
     return Response.json({
       taskId: stored.task_id || taskId || '',
+      videoId: stored.video_id || videoId || '',
       status: 'ready',
       progress: 1,
       url: stored.public_url,
@@ -282,16 +354,27 @@ export async function GET(req: NextRequest) {
       raw: stored,
     });
   }
-  if (!taskId) {
-    return Response.json({ error: 'Missing taskId' }, { status: 400 });
+  if (!taskId && !videoId) {
+    return Response.json({ error: 'Missing videoId or taskId' }, { status: 400 });
   }
 
   try {
-    const response = await fetch(`${getBaseUrl()}/videos/${encodeURIComponent(taskId)}`, {
-      method: 'GET',
-      headers: getHeaders(),
-    });
-    const data = await response.json().catch(async () => ({ error: await response.text() })) as AgnesVideoStatusResponse;
+    let response = videoId
+      ? await fetch(`${getGatewayOrigin()}/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(getVideoModel())}`, {
+        method: 'GET',
+        headers: getHeaders(),
+      })
+      : null;
+    if ((!response || !response.ok) && taskId) {
+      response = await fetch(`${getBaseUrl()}/videos/${encodeURIComponent(taskId)}`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+    }
+    if (!response) {
+      return Response.json({ error: 'Unable to query video task' }, { status: 502 });
+    }
+    const data = normalizeVideoResponse(await response.json().catch(async () => ({ error: await response.text() })));
     if (!response.ok) {
       return Response.json({ error: data }, { status: response.status });
     }
@@ -306,14 +389,16 @@ export async function GET(req: NextRequest) {
         key: assetKey,
         type: eventType,
         prompt,
-        taskId,
+        taskId: taskId || extractTaskId(data),
+        videoId: videoId || extractVideoId(data),
         sourceUrl,
         segmentIndex,
       })
       : { publicUrl: sourceUrl, persisted: false };
 
     return Response.json({
-      taskId,
+      taskId: taskId || extractTaskId(data),
+      videoId: videoId || extractVideoId(data),
       status,
       progress: data.progress ?? data.data?.progress ?? 0,
       url: persisted.publicUrl,

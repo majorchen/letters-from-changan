@@ -118,6 +118,11 @@ const FALLBACK_FIRST_LETTER = `陌生的收信人：
 
 林深`;
 
+function buildVideoPrompt(content: string, letterNumber: number): string {
+  const excerpt = content.replace(/\s+/g, ' ').slice(0, 420);
+  return `A five-second cinematic glimpse sent from the year 2077 with a personal letter. Letter number ${letterNumber}. Visualize one concrete future environment implied by this letter: ${excerpt}. Near-future Chinese city, restrained believable technology, traces of loneliness and human habitation, coherent single scene, slow camera movement, one consistent person at most, natural anatomy, no duplicate person, no text, no subtitles, no letters, no logos, no watermark.`;
+}
+
 export async function POST(req: NextRequest) {
   if (!process.env.AGNES_API_KEY) {
     return Response.json({ error: 'Missing AGNES_API_KEY' }, { status: 500 });
@@ -168,10 +173,14 @@ export async function POST(req: NextRequest) {
     });
 
     const content = response.choices[0]?.message?.content || '';
-    return Response.json({ content });
+    return Response.json({ content, videoPrompt: buildVideoPrompt(content, nextLetterNumber) });
   } catch (err) {
     if (!cleanedReply && cleanedHistory.length === 0) {
-      return Response.json({ content: FALLBACK_FIRST_LETTER, fallback: true });
+      return Response.json({
+        content: FALLBACK_FIRST_LETTER,
+        videoPrompt: buildVideoPrompt(FALLBACK_FIRST_LETTER, 1),
+        fallback: true,
+      });
     }
     return Response.json({ error: String(err) }, { status: 500 });
   }
