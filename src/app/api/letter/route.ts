@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
   } else if (cleanedHistory.length > 0) {
     messages.push({
       role: 'user',
-      content: `请根据以上完整通信历史，写林深的下一封回信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 必须回应玩家最近一封信里的具体内容，不要重复之前已经写过的信，不要重新写第一封信。`,
+      content: `请根据以上完整通信历史，让林深在一段沉默后主动写来下一封信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 可以承接玩家最近一封回信里的具体内容，也可以主动报告2077刚发生的一件小事或追问长安近况。不要假装玩家刚刚又回了信，不要重复之前已经写过的信，不要重新写第一封信。`,
     });
   } else {
     messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写第一封信给这位刚到长安的外乡人。` });

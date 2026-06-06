@@ -1,14 +1,34 @@
 import { NextRequest } from 'next/server';
-import OpenAI from 'openai';
 import { IMAGE_PROMPT_SUFFIX } from '@/lib/prompts';
 
 export const maxDuration = 60;
 
-function getClient() {
-  return new OpenAI({
-    apiKey: process.env.AGNES_API_KEY || '',
-    baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+type AgnesImageResponse = {
+  data?: Array<{ url?: string }>;
+  error?: unknown;
+};
+
+async function generateImage(model: string, prompt: string): Promise<AgnesImageResponse> {
+  const baseUrl = (process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1').replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}/images/generations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.AGNES_API_KEY || ''}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size: '1024x768',
+      extra_body: {
+        response_format: 'url',
+      },
+    }),
   });
+  const data = await response.json() as AgnesImageResponse;
+  if (!response.ok) throw new Error(`${model}: ${JSON.stringify(data.error || data)}`);
+  if (!data.data?.[0]?.url) throw new Error(`${model}: response did not contain data[0].url`);
+  return data;
 }
 
 export async function POST(req: NextRequest) {
@@ -26,13 +46,13 @@ export async function POST(req: NextRequest) {
   const prompt = cleanedScene.includes('aged silk') ? cleanedScene : `${cleanedScene}. ${IMAGE_PROMPT_SUFFIX}`;
 
   try {
-    // Agnes image API supports 1024x768 / 1024x1024 / 768x1024 only (NOT 1792x1024).
-    // 2.0-flash verified stable; 2.1 was unstable (520 errors).
-    const response = await getClient().images.generate({
-      model: 'agnes-image-2.0-flash',
-      prompt,
-      size: '1024x768',
-    });
+    let response;
+    try {
+      response = await generateImage('agnes-image-2.1-flash', prompt);
+    } catch (error) {
+      console.warn('[image-generation] Agnes Image 2.1 failed, falling back to 2.0', error);
+      response = await generateImage('agnes-image-2.0-flash', prompt);
+    }
 
     const url = response.data?.[0]?.url || '';
     return Response.json({ url });

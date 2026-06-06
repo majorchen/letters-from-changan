@@ -3,8 +3,8 @@
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, loadSceneCache, saveSceneCache, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
-import { LetterEntry, LetterVideo, PlayerState, ROLES } from '@/lib/prompts';
+import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, NarrativeStateUpdate, getCrossLineEchoes } from '@/lib/gameState';
+import { LetterEntry, LetterVideo, PlayerState, ROLES, VisualProfile } from '@/lib/prompts';
 import { getCloudUserEmail } from '@/lib/cloudSaves';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
@@ -48,12 +48,8 @@ const CHAT_TIMEOUT_MS = 45_000;
 const NEW_LETTER_OPTION = '信匣里有一封新信';
 const VIDEO_POLL_INTERVAL_MS = 10_000;
 const VIDEO_POLL_MAX_ATTEMPTS = 30;
-const MUSIC_ENABLED_KEY = 'letters-from-changan-music-enabled-v1';
-const MUSIC_TRACKS: Record<'act1' | 'act2' | 'act3', string> = {
-  act1: '/audio/changan-act-1.mp3',
-  act2: '/audio/changan-act-2.mp3',
-  act3: '/audio/changan-act-3.mp3',
-};
+const ACTIVE_LETTER_INTERVAL_TURNS = 8;
+const FIRST_LETTER_VIDEO_URL = '/video/linshen-first-letter.mp4';
 
 const EVENT_LABELS: Record<string, string> = {
   anchor_inn_basement_future: '客栈暗处的未来痕迹',
@@ -133,6 +129,10 @@ function extractOptions(text: string): string[] {
   return Array.from(new Set(options)).slice(0, 4);
 }
 
+function isGenericOption(option: string): boolean {
+  return /^(继续观察|仔细查看|换个角度试探一句|打听消息|看看周围|静观其变|等待变化|记下来|离开这里)$/.test(option.trim());
+}
+
 function findContextSubjects(state: PlayerState, content: string): { npc: string; place: string; clue: string } {
   const npc = [...(state.knownNPCs || [])]
     .reverse()
@@ -155,7 +155,7 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
       [`问${npc}何时知道此事`, `追查「${clue}」最早的来源`, `把刚才的话反说一遍试他`],
       [`让${npc}指出话里的证据`, `去${place}找第二个知情人`, `暂不表态，记下他的原话`],
     ];
-    return withContradictionOption(sets[variant], contradictionOption);
+    return withContradictionOption(sets[variant].slice(0, 2), contradictionOption);
   }
   if (/(看|观察|检查|查看|摸|靠近|打开|寻找|翻|搜)/.test(playerInput)) {
     const sets = [
@@ -163,26 +163,23 @@ function fallbackOptions(state: PlayerState, content: string, playerInput = ''):
       [`把${clue}与先前线索对照`, `查看${place}谁在避开目光`, `先收好证物不惊动旁人`],
       [`顺着${clue}出现的方向查`, `问${npc}此物原先在何处`, `留在${place}等变化再发生`],
     ];
-    return withContradictionOption(sets[variant], contradictionOption);
+    return withContradictionOption(sets[variant].slice(0, 2), contradictionOption);
   }
   if (/(去|走|前往|离开|回|进入|出门|跟|追)/.test(playerInput)) {
     return withContradictionOption([
       `沿${place}人少的方向追去`,
       `请${npc}带路避开巡查`,
-      `先绕到${place}另一侧确认`,
     ], contradictionOption);
   }
   if (/(拒绝|不理|忽视|算了|离远|躲|藏)/.test(playerInput)) {
     return withContradictionOption([
       `离开${place}但记住${clue}`,
       `让${npc}替你留意后续`,
-      `装作无事，暗看谁会靠近`,
     ], contradictionOption);
   }
   return withContradictionOption([
     `问${npc}关于「${clue}」的来由`,
     `在${place}寻找能印证此事的人`,
-    `暂且离开，把${clue}记在心里`,
   ], contradictionOption);
 }
 
@@ -202,15 +199,16 @@ function optionSimilarity(a: string, b: string): number {
 function recentAssistantOptions(messages: ChatMessage[]): string[] {
   return messages
     .filter((message) => message.role === 'assistant' && Array.isArray(message.options))
-    .slice(-2)
+    .slice(-6)
     .flatMap((message) => message.options || []);
 }
 
-function dedupeOptions(options: string[], messages: ChatMessage[], fallback: string[]): string[] {
+function dedupeOptions(options: string[], messages: ChatMessage[]): string[] {
   const recent = recentAssistantOptions(messages);
   const result: string[] = [];
-  for (const option of [...options, ...fallback]) {
+  for (const option of options) {
     if (!option.trim()) continue;
+    if (isGenericOption(option)) continue;
     if (result.some((existing) => optionSimilarity(existing, option) >= 0.78)) continue;
     if (recent.some((existing) => optionSimilarity(existing, option) >= 0.84)) continue;
     result.push(option);
@@ -276,6 +274,20 @@ function hasDiscoveredMailbox(state: PlayerState): boolean {
 
 function getUnreadLetterCount(state: PlayerState): number {
   return state.mailbox?.unread?.length ?? 0;
+}
+
+function findUnreadLetter(state: PlayerState): LetterEntry | undefined {
+  const noticeIds = new Set((state.mailbox?.unread || []).map((notice) => notice.id));
+  return [...(state.letterHistory || [])]
+    .reverse()
+    .find((letter) => letter.from === 'linShen' && (noticeIds.has(letter.id) || !letter.readAt));
+}
+
+function shouldPrepareActiveLetter(state: PlayerState): boolean {
+  if (!state.mailbox.discovered || state.mailbox.pending || state.mailbox.unread.length > 0) return false;
+  const linLetters = state.letterHistory.filter((letter) => letter.from === 'linShen');
+  if (linLetters.length === 0) return false;
+  return state.turnCount - (state.mailbox.lastGeneratedAtTurn || 0) >= ACTIVE_LETTER_INTERVAL_TURNS;
 }
 
 function fallbackSceneFromNarrative(state: PlayerState, content: string): string {
@@ -368,6 +380,21 @@ function parseNarrativeState(text: string): NarrativeStateUpdate | undefined {
           lastInteraction: fact || '',
           knownFacts: fact ? [fact] : [],
         };
+      }
+    }
+    if (key === 'VISUAL_PROFILE' && value.toLowerCase() !== 'none') {
+      update.visualProfiles = {};
+      for (const rawEntry of value.split(/[;；]/)) {
+        const separator = rawEntry.indexOf('|');
+        if (separator < 1) continue;
+        const name = rawEntry.slice(0, separator).trim();
+        const description = rawEntry.slice(separator + 1).trim();
+        if (!name || !description) continue;
+        update.visualProfiles[name] = {
+          name,
+          description: description.slice(0, 500),
+          createdAt: Date.now(),
+        } satisfies VisualProfile;
       }
     }
     if (key === 'EVENT_VERSION' && value.toLowerCase() !== 'none') {
@@ -481,6 +508,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [showLetter, setShowLetter] = useState(false);
   const [letterContent, setLetterContent] = useState('');
   const [activeLetterVideo, setActiveLetterVideo] = useState<LetterVideo | undefined>();
+  const [activeLetterWasUnread, setActiveLetterWasUnread] = useState(false);
   const [letterLoading, setLetterLoading] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
   const [showLetterBox, setShowLetterBox] = useState(false);
@@ -489,13 +517,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [shareImageUrl, setShareImageUrl] = useState('');
   const [saveToast, setSaveToast] = useState('');
   const [ending, setEnding] = useState<{ title: string; scenes: string[] } | null>(null);
-  const [musicEnabled, setMusicEnabled] = useState(false);
-  const [musicUnavailable, setMusicUnavailable] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const messageCounterRef = useRef(0);
   const preparingLetterRef = useRef(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Always-fresh refs to avoid React closure staleness in async callbacks
   const gameStateRef = useRef(gameState);
@@ -579,8 +604,35 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   useEffect(() => {
     const pending = gameState.mailbox?.pending;
     if (!pending || preparingLetterRef.current) return;
+    if (gameState.letterHistory.every((letter) => letter.from !== 'linShen')) {
+      const now = Date.now();
+      void finishIncomingLetter(pending.id, pending.content, {
+        key: 'preset:first-letter-2077',
+        status: 'ready',
+        prompt: pending.video.prompt,
+        url: FIRST_LETTER_VIDEO_URL,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
     if (pending.video.status === 'failed') {
-      if ((pending.video.retryCount || 0) <= 1) void retryPendingLetter(pending.id, pending.content, pending.video);
+      if ((pending.video.retryCount || 0) <= 2) {
+        void retryPendingLetter(pending.id, pending.content, pending.video);
+      } else {
+        const current = gameStateRef.current;
+        const updated = {
+          ...current,
+          mailbox: {
+            ...current.mailbox,
+            pending: undefined,
+            lastGeneratedAtTurn: Math.max(0, current.turnCount - ACTIVE_LETTER_INTERVAL_TURNS + 2),
+          },
+        };
+        gameStateRef.current = updated;
+        onStateChange(updated);
+        saveGameState(updated);
+      }
       return;
     }
     void resumePendingLetter(pending.id, pending.content, pending.video);
@@ -590,81 +642,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     gameState.mailbox?.pending?.video.status,
     gameState.mailbox?.pending?.video.retryCount,
   ]);
-
-  useEffect(() => {
-    setMusicEnabled(localStorage.getItem(MUSIC_ENABLED_KEY) === 'true');
-  }, []);
-
-  useEffect(() => {
-    const track = MUSIC_TRACKS[gameState.storyPhase || 'act1'];
-    const audio = audioRef.current || new Audio();
-    audioRef.current = audio;
-    audio.loop = true;
-    audio.preload = 'auto';
-    let cancelled = false;
-    const timers: number[] = [];
-
-    const fadeTo = (target: number, duration: number) => new Promise<void>((resolve) => {
-      const start = audio.volume;
-      const startedAt = performance.now();
-      const timer = window.setInterval(() => {
-        if (cancelled) {
-          window.clearInterval(timer);
-          resolve();
-          return;
-        }
-        const progress = Math.min(1, (performance.now() - startedAt) / duration);
-        audio.volume = start + (target - start) * progress;
-        if (progress >= 1) {
-          window.clearInterval(timer);
-          resolve();
-        }
-      }, 50);
-      timers.push(timer);
-    });
-
-    const updateMusic = async () => {
-      if (!musicEnabled) {
-        await fadeTo(0, 350);
-        if (!cancelled) audio.pause();
-        return;
-      }
-
-      if (!audio.src.endsWith(track)) {
-        if (!audio.paused) await fadeTo(0, 500);
-        audio.src = track;
-        audio.currentTime = 0;
-      }
-
-      try {
-        await audio.play();
-        setMusicUnavailable(false);
-        await fadeTo(0.22, 700);
-      } catch {
-        setMusicUnavailable(true);
-        setMusicEnabled(false);
-        localStorage.setItem(MUSIC_ENABLED_KEY, 'false');
-      }
-    };
-
-    void updateMusic();
-    return () => {
-      cancelled = true;
-      timers.forEach((timer) => window.clearInterval(timer));
-    };
-  }, [gameState.storyPhase, musicEnabled]);
-
-  useEffect(() => () => {
-    audioRef.current?.pause();
-    audioRef.current = null;
-  }, []);
-
-  function toggleMusic() {
-    const next = !musicEnabled;
-    setMusicEnabled(next);
-    setMusicUnavailable(false);
-    localStorage.setItem(MUSIC_ENABLED_KEY, String(next));
-  }
 
   useEffect(() => {
     if (hasDiscoveredMailbox(gameState) && getUnreadLetterCount(gameState) === 0) {
@@ -711,15 +688,16 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       if (narrativeState?.visualCue === 'ending' && !ending) {
         void prepareEnding();
       }
+      const mailboxTriggered = rawContent.includes('[MAILBOX]');
+      const updated = updateChapter(gs, rawContent, narrativeState);
 
       // 1. Scene image — prefer the AI's current-shot [SCENE:] tag every turn.
-      //    Keyword presets are only fallback when the model omits a scene tag.
+      //    Every story turn generates a fresh image; only the fixed role prologue is pre-rendered.
       const sceneMatch = rawContent.match(/\[SCENE:([^\]]+)\]/i);
       if (sceneMatch) {
         const sceneDesc = sceneMatch[1].trim();
         generateSceneImage(
-          sceneDesc + visualProfilesForScene(gs, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
-          `ai:${sceneDesc.slice(0, 120)}`,
+          sceneDesc + visualProfilesForScene(updated, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
         );
       } else {
         let usedKeywordFallback = false;
@@ -727,24 +705,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           if (rawContent.includes(loc.keyword)) {
             usedKeywordFallback = true;
             generateSceneImage(
-              loc.scene + visualProfilesForScene(gs, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
-              `location:${loc.keyword}`,
+              loc.scene + visualProfilesForScene(updated, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
             );
             break;
           }
         }
         if (!usedKeywordFallback) {
-          const fallbackScene = fallbackSceneFromNarrative(gs, cleanContent);
+          const fallbackScene = fallbackSceneFromNarrative(updated, cleanContent);
           generateSceneImage(
-            fallbackScene + visualProfilesForScene(gs, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
-            `narrative:${gs.role}:${gs.location}:${cleanContent.replace(/\s+/g, ' ').slice(0, 120)}`,
+            fallbackScene + visualProfilesForScene(updated, rawContent) + '. Warm amber-gold palette, painted on aged silk texture, Dunhuang fresco colors, textured painterly digital art.',
           );
         }
       }
 
       // 2. Mailbox trigger (from raw)
-      const mailboxTriggered = rawContent.includes('[MAILBOX]');
-      const updated = updateChapter(gs, rawContent, narrativeState);
       const pendingFirstMailbox = mailboxTriggered || narrativeState?.mailbox === 'pending_first_open';
 
       if (pendingFirstMailbox && !hasDiscoveredMailbox(gs)) {
@@ -759,10 +733,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           updated.events = [...updated.events, '发现邮箱'];
         }
         assistantMsg.content = cleanContent;
+        const extractedOptions = extractOptions(rawContent);
         assistantMsg.options = dedupeOptions(
-          fallbackOptions(updated, rawContent, text),
+          extractedOptions.length > 0 ? extractedOptions : fallbackOptions(updated, rawContent, text),
           msgs,
-          fallbackOptions(updated, rawContent, text),
         );
         onStateChange(updated);
         saveGameState(updated);
@@ -778,13 +752,13 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       // 4. Options (from raw) — stored on the message for persistence
       const extractedOptions = extractOptions(rawContent);
       const contextualFallback = fallbackOptions(updated, rawContent, text);
-      const optionsWithFallback = extractedOptions.length > 0 ? extractedOptions : contextualFallback;
+      const modelOptions = dedupeOptions(extractedOptions, msgs);
+      const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
       const opts = updated.awaitingFreeInput
         ? []
         : dedupeOptions(
           ensureMailboxOption(withContradictionOption(optionsWithFallback, getContradictionOption(updated)), updated),
           msgs,
-          contextualFallback,
         );
       if (opts.includes(NEW_LETTER_OPTION)) {
         updated.mailbox = {
@@ -801,6 +775,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const finalMessages = [...newMessages, { ...assistantMsg, content: cleanContent, options: opts }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
+      if (shouldPrepareActiveLetter(updated)) {
+        window.setTimeout(() => void prepareIncomingLetter(null), 500);
+      }
     } catch (err) {
       assistantMsg.content = '（长安城的喧嚣声突然安静了一瞬...请再试一次）';
       setMessages([...newMessages, assistantMsg]);
@@ -815,7 +792,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox(false);
     setLetterLoading(false);
     const gs = gameStateRef.current;
-    const targetId = letterId || gs.mailbox.unread[0]?.id;
+    const targetId = letterId || gs.mailbox.unread[0]?.id || findUnreadLetter(gs)?.id;
     const letter = gs.letterHistory.find((item) => item.id === targetId && item.from === 'linShen');
     if (!letter) {
       setShowLetter(false);
@@ -824,6 +801,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setLetterContent(letter.content);
     setActiveLetterVideo(letter.video);
     const wasUnread = !letter.readAt;
+    setActiveLetterWasUnread(wasUnread);
     const updated: PlayerState = {
       ...gs,
       chapter: gs.chapter === 'mailbox_found' ? 'first_letter_read' : gs.chapter,
@@ -837,6 +815,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     gameStateRef.current = updated;
     onStateChange(updated);
     saveGameState(updated);
+    removeMailboxOptionFromLatestMessage();
     if (wasUnread && gs.letterHistory.filter((item) => item.from === 'linShen' && item.readAt).length === 0) {
       void showGuestFirstLetterToast();
     }
@@ -942,8 +921,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     if (preparingLetterRef.current) return;
     preparingLetterRef.current = true;
     try {
-      const retryCount = (previous.retryCount || 0) + 1;
-      const key = `${previous.key}:retry-${retryCount}`;
+      const retryCount = previous.retryCount || 0;
+      const key = `${previous.key}:retry-${retryCount + 1}`;
       const res = await fetch('/api/video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1012,6 +991,19 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       if (!res.ok || !data.content || !data.videoPrompt) throw new Error(data.error || 'Letter generation failed');
       const id = `letter-${Date.now()}`;
       const key = `letter:${gs.role}:${id}`;
+      const isFirstLetter = gs.letterHistory.every((letter) => letter.from !== 'linShen');
+      if (isFirstLetter) {
+        const now = Date.now();
+        await finishIncomingLetter(id, data.content, {
+          key: 'preset:first-letter-2077',
+          status: 'ready',
+          prompt: data.videoPrompt,
+          url: FIRST_LETTER_VIDEO_URL,
+          createdAt: now,
+          updatedAt: now,
+        });
+        return;
+      }
       const videoRes = await fetch('/api/video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1111,10 +1103,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   function handleLetterClose() {
     setShowLetter(false);
     setActiveLetterVideo(undefined);
-    // Always continue narration after closing letter
-    setTimeout(() => {
-      sendMessage(buildLetterContinuationPrompt(gameStateRef.current, 'read'), { visibleUser: false });
-    }, 800);
+    if (activeLetterWasUnread) {
+      setActiveLetterWasUnread(false);
+      setTimeout(() => {
+        sendMessage(buildLetterContinuationPrompt(gameStateRef.current, 'read'), { visibleUser: false });
+      }, 800);
+    }
   }
 
   function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number): void {
@@ -1297,15 +1291,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
-  // Generate scene image with caching. cacheKey identifies the location;
-  // if already generated, reuse instantly instead of regenerating.
-  async function generateSceneImage(scene: string, cacheKey: string) {
-    const cache = loadSceneCache();
-    if (cache[cacheKey]) {
-      setSceneImage(cache[cacheKey]);
-      persistLatestSceneImage(cache[cacheKey]);
-      return;
-    }
+  async function generateSceneImage(scene: string) {
     setImageLoading(true);
     try {
       const res = await fetch('/api/image', {
@@ -1317,8 +1303,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       if (data.url) {
         setSceneImage(data.url);
         persistLatestSceneImage(data.url);
-        cache[cacheKey] = data.url;
-        saveSceneCache(cache);
       }
     } catch { /* silently fail */ }
     setImageLoading(false);
@@ -1338,6 +1322,20 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
+  function removeMailboxOptionFromLatestMessage() {
+    const currentMessages = messagesRef.current;
+    const lastMessage = currentMessages[currentMessages.length - 1];
+    if (lastMessage?.role !== 'assistant' || !lastMessage.options?.includes(NEW_LETTER_OPTION)) return;
+    const nextMessages = [...currentMessages];
+    nextMessages[nextMessages.length - 1] = {
+      ...lastMessage,
+      options: lastMessage.options.filter((option) => option !== NEW_LETTER_OPTION),
+    };
+    messagesRef.current = nextMessages;
+    setMessages(nextMessages);
+    saveChatHistory(nextMessages);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
@@ -1345,8 +1343,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   function handleOptionClick(option: string) {
-    if (isMailboxOption(option, gameState)) {
-      openLetter();
+    const currentState = gameStateRef.current;
+    if (isMailboxOption(option, currentState) || option === NEW_LETTER_OPTION) {
+      const unreadLetter = findUnreadLetter(currentState);
+      if (unreadLetter) {
+        void openLetter(unreadLetter.id);
+      } else {
+        removeMailboxOptionFromLatestMessage();
+        setShowLetterBox(true);
+      }
       return;
     }
 
@@ -1453,16 +1458,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="text-amber-500/30 text-[10px]">天宝元年 · {roleInfo?.name || '旅人'}</div>
         </div>
         <div className="justify-self-end flex min-w-10 items-center justify-end">
-          <button
-            onClick={toggleMusic}
-            className={`flex h-7 w-7 items-center justify-center text-sm transition-colors hover:text-amber-400 ${
-              musicEnabled ? 'text-amber-300/80' : 'text-amber-400/35'
-            }`}
-            title={musicUnavailable ? '乐声尚未备好' : musicEnabled ? '关闭背景音乐' : '开启背景音乐'}
-            aria-label={musicEnabled ? '关闭背景音乐' : '开启背景音乐'}
-          >
-            {musicEnabled ? '♫' : '♪'}
-          </button>
           <button onClick={() => void handleShareCard()} className="flex h-7 w-7 items-center justify-center text-amber-400/40 hover:text-amber-400 text-sm" title="生成分享卡片">
             🕊️
           </button>

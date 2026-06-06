@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 const files = {
   game: await readFile(new URL('../src/components/GameScreen.tsx', import.meta.url), 'utf8'),
@@ -8,11 +8,16 @@ const files = {
   globals: await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8'),
   video: await readFile(new URL('../src/app/api/video/route.ts', import.meta.url), 'utf8'),
   letter: await readFile(new URL('../src/app/api/letter/route.ts', import.meta.url), 'utf8'),
+  image: await readFile(new URL('../src/app/api/image/route.ts', import.meta.url), 'utf8'),
   letterVideo: await readFile(new URL('../src/components/LetterVideo.tsx', import.meta.url), 'utf8'),
   letterBox: await readFile(new URL('../src/components/LetterBox.tsx', import.meta.url), 'utf8'),
   ending: await readFile(new URL('../src/components/EndingSequence.tsx', import.meta.url), 'utf8'),
   start: await readFile(new URL('../src/components/StartScreen.tsx', import.meta.url), 'utf8'),
 };
+
+const firstLetterVideoExists = await access(
+  new URL('../public/video/linshen-first-letter.mp4', import.meta.url),
+).then(() => true).catch(() => false);
 
 const checks = [
   {
@@ -70,11 +75,29 @@ const checks = [
       && files.letterVideo.includes('playsInline'),
   },
   {
-    name: 'three-act background music is optional and defaults to off',
-    pass: files.game.includes('MUSIC_TRACKS')
-      && files.game.includes("localStorage.getItem(MUSIC_ENABLED_KEY) === 'true'")
-      && files.game.includes('toggleMusic')
-      && files.game.includes("act3: '/audio/changan-act-3.mp3'"),
+    name: 'first incoming letter uses the bundled 2077 video',
+    pass: firstLetterVideoExists
+      && files.game.includes("FIRST_LETTER_VIDEO_URL = '/video/linshen-first-letter.mp4'")
+      && files.state.includes("key: 'preset:first-letter-2077'"),
+  },
+  {
+    name: 'opening a letter clears the one-time chat option',
+    pass: files.game.includes('removeMailboxOptionFromLatestMessage()')
+      && files.game.includes('lastMessage.options.filter((option) => option !== NEW_LETTER_OPTION)')
+      && files.game.includes('if (activeLetterWasUnread)'),
+  },
+  {
+    name: 'read letters cannot remain in the unread queue after reload',
+    pass: files.state.includes('const normalizedUnread')
+      && files.state.includes("letter.from === 'linShen' && !letter.readAt"),
+  },
+  {
+    name: 'story images use Agnes Image 2.1 without local scene cache',
+    pass: files.image.includes("generateImage('agnes-image-2.1-flash'")
+      && files.image.includes('extra_body')
+      && files.image.includes("response_format: 'url'")
+      && !files.game.includes('loadSceneCache')
+      && !files.state.includes('SCENE_CACHE_KEY'),
   },
   {
     name: 'cloud saves are optional and Supabase-backed',

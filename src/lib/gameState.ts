@@ -5,7 +5,6 @@ const LEGACY_HISTORY_KEY = 'letters-from-changan-history';
 const LEGACY_SAVES_KEY = 'letters-from-changan-saves-v1';
 const STORAGE_KEY = 'letters-from-changan-state-v2';
 const HISTORY_KEY = 'letters-from-changan-history-v2';
-const SCENE_CACHE_KEY = 'letters-from-changan-scenes';
 const SAVES_KEY = 'letters-from-changan-saves-v2';
 const ACTIVE_SAVE_KEY = 'letters-from-changan-active-save-v2';
 
@@ -36,26 +35,12 @@ export interface NarrativeStateUpdate {
   events?: string[];
   summary?: string;
   npcMemories?: Record<string, NpcMemory>;
+  visualProfiles?: Record<string, VisualProfile>;
   eventVersions?: Record<string, Record<string, string>>;
   secondCorrespondentHint?: string;
   visualCue?: 'none' | 'glitch' | 'memory' | 'ending';
   inputMode?: 'options' | 'free';
   mailbox?: 'none' | 'pending_first_open' | 'unread' | 'quiet';
-}
-
-// Scene image cache: location key → image URL (persists across sessions)
-export function loadSceneCache(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  try {
-    return JSON.parse(localStorage.getItem(SCENE_CACHE_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
-
-export function saveSceneCache(cache: Record<string, string>): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(SCENE_CACHE_KEY, JSON.stringify(cache));
 }
 
 export interface ChatMessage {
@@ -75,20 +60,6 @@ function makeId(): string {
   return `save-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function fallbackVisualProfile(name: string): VisualProfile {
-  const variants = [
-    'a narrow face, steady dark eyes, black hair in a low Tang topknot, muted blue-grey Tang robe, plain hemp belt',
-    'a round face, warm brown skin, alert dark eyes, black hair tied with a wooden pin, dark green Tang robe, cloth shoulder bag',
-    'an angular face, sun-touched skin, straight brows, black hair beneath a simple headcloth, brown Tang robe, worn leather belt',
-  ];
-  const hash = Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return {
-    name,
-    description: `A named Tang Dynasty Chinese character with ${variants[hash % variants.length]}. Keep this exact appearance whenever ${name} returns.`,
-    createdAt: Date.now(),
-  };
-}
-
 function ensureVisualProfiles(state: PlayerState): Record<string, VisualProfile> {
   const profiles = { ...(state.visualProfiles || {}) };
   const roleDescription = CORE_VISUAL_PROFILES[state.role];
@@ -96,10 +67,10 @@ function ensureVisualProfiles(state: PlayerState): Record<string, VisualProfile>
     profiles[state.role] = { name: '玩家', description: roleDescription, createdAt: Date.now() };
   }
   for (const name of state.knownNPCs || []) {
-    if (!profiles[name]) {
+    if (!profiles[name] && CORE_VISUAL_PROFILES[name]) {
       profiles[name] = {
         name,
-        description: CORE_VISUAL_PROFILES[name] || fallbackVisualProfile(name).description,
+        description: CORE_VISUAL_PROFILES[name],
         createdAt: Date.now(),
       };
     }
@@ -134,16 +105,38 @@ function clearLegacyStorage(): void {
 
 function normalizePlayerState(state: PlayerState): PlayerState {
   const mailbox = getMailboxState(state);
+  const unreadIds = new Set((Array.isArray(mailbox.unread) ? mailbox.unread : []).map((notice) => notice.id));
+  let linShenLetterIndex = 0;
   const storyPhase = state.storyPhase || getStoryPhase(state).phase;
   const letterHistory: LetterEntry[] = (Array.isArray(state.letterHistory) ? state.letterHistory : [])
     .filter((letter) => letter && typeof letter.content === 'string')
-    .map((letter, index) => ({
-      ...letter,
-      id: letter.id || `legacy-letter-${letter.timestamp || Date.now()}-${index}`,
-      from: letter.from === 'player' ? 'player' : 'linShen',
-      timestamp: letter.timestamp || Date.now(),
-      readAt: letter.from === 'player' ? (letter.readAt || letter.timestamp || Date.now()) : letter.readAt,
-    }));
+    .map((letter, index) => {
+      const id = letter.id || `legacy-letter-${letter.timestamp || Date.now()}-${index}`;
+      const from = letter.from === 'player' ? 'player' : 'linShen';
+      const isFirstLinShenLetter = from === 'linShen' && linShenLetterIndex++ === 0;
+      return {
+        ...letter,
+        id,
+        from,
+        timestamp: letter.timestamp || Date.now(),
+        readAt: from === 'player'
+          ? (letter.readAt || letter.timestamp || Date.now())
+          : (letter.readAt || (!unreadIds.has(id) ? letter.timestamp || Date.now() : undefined)),
+        video: letter.video || (isFirstLinShenLetter ? {
+          key: 'preset:first-letter-2077',
+          status: 'ready' as const,
+          prompt: 'A glimpse of Lin Shen sending the first letter from 2077.',
+          url: '/video/linshen-first-letter.mp4',
+          createdAt: letter.timestamp || Date.now(),
+          updatedAt: letter.timestamp || Date.now(),
+        } : undefined),
+      };
+    });
+  const normalizedUnread = (Array.isArray(mailbox.unread) ? mailbox.unread : [])
+    .filter((notice, index, notices) => (
+      notices.findIndex((item) => item.id === notice.id) === index
+      && letterHistory.some((letter) => letter.id === notice.id && letter.from === 'linShen' && !letter.readAt)
+    ));
   const normalized = {
     ...state,
     knownNPCs: Array.isArray(state.knownNPCs) ? state.knownNPCs : [],
@@ -160,7 +153,7 @@ function normalizePlayerState(state: PlayerState): PlayerState {
     letterHistory,
     mailbox: {
       ...mailbox,
-      unread: Array.isArray(mailbox.unread) ? mailbox.unread : [],
+      unread: normalizedUnread,
     },
     visualProfiles: state.visualProfiles && typeof state.visualProfiles === 'object' ? state.visualProfiles : {},
     turnCount: state.turnCount || 0,
@@ -449,6 +442,12 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
           }];
         }),
       ),
+    };
+  }
+  if (narrativeState?.visualProfiles) {
+    updated.visualProfiles = {
+      ...updated.visualProfiles,
+      ...narrativeState.visualProfiles,
     };
   }
   if (narrativeState?.eventVersions) {

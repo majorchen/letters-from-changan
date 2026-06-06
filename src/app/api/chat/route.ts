@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       model: 'agnes-2.0-flash',
       messages: allMessages,
       stream: true,
-      temperature: 0.85,
+      temperature: 0.78,
       max_tokens: 1000,
     });
 
