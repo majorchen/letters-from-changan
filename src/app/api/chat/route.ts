@@ -56,12 +56,10 @@ function normalizePlayerState(value: unknown): PlayerState | null {
   };
 }
 
-function getClient() {
-  return new OpenAI({
-    apiKey: process.env.AGNES_API_KEY || '',
-    baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
-  });
-}
+const client = new OpenAI({
+  apiKey: process.env.AGNES_API_KEY || '',
+  baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+});
 
 export async function POST(req: NextRequest) {
   if (!process.env.AGNES_API_KEY) {
@@ -83,7 +81,7 @@ export async function POST(req: NextRequest) {
   ];
 
   try {
-    const stream = await getClient().chat.completions.create({
+    const stream = await client.chat.completions.create({
       model: 'agnes-2.0-flash',
       messages: allMessages,
       stream: true,

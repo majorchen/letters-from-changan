@@ -52,12 +52,10 @@ function cleanPlayerContext(value: unknown): LetterPlayerContext {
   };
 }
 
-function getClient() {
-  return new OpenAI({
-    apiKey: process.env.AGNES_API_KEY || '',
-    baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
-  });
-}
+const client = new OpenAI({
+  apiKey: process.env.AGNES_API_KEY || '',
+  baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+});
 
 function getLetterArcInstruction(letterNumber: number): string {
   if (letterNumber <= 1) {
@@ -178,7 +176,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const response = await getClient().chat.completions.create({
+    const response = await client.chat.completions.create({
       model: 'agnes-2.0-flash',
       messages,
       temperature: 0.9,

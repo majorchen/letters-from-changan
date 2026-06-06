@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import StartScreen from '@/components/StartScreen';
 import GameScreen from '@/components/GameScreen';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { PlayerState } from '@/lib/prompts';
 import { activateSave, createNewGame, listSaveSummaries, SaveSummary } from '@/lib/gameState';
 
@@ -50,11 +51,13 @@ export default function Home() {
 
   if (screen === 'game' && gameState) {
     return (
-      <GameScreen
-        gameState={gameState}
-        onStateChange={setGameState}
-        onExit={handleExit}
-      />
+      <ErrorBoundary>
+        <GameScreen
+          gameState={gameState}
+          onStateChange={setGameState}
+          onExit={handleExit}
+        />
+      </ErrorBoundary>
     );
   }
 

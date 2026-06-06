@@ -4,6 +4,11 @@ import { PlayerState, ROLES } from '@/lib/prompts';
 
 export const maxDuration = 60;
 
+const client = new OpenAI({
+  apiKey: process.env.AGNES_API_KEY || '',
+  baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
+});
+
 type EndingPayload = {
   title: string;
   scenes: string[];
@@ -44,10 +49,6 @@ export async function POST(req: NextRequest) {
     recentMessages?: { role?: string; content?: string }[];
   };
   if (!playerState?.role) return Response.json({ error: 'Invalid playerState' }, { status: 400 });
-  const client = new OpenAI({
-    apiKey: process.env.AGNES_API_KEY,
-    baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
-  });
   const context = (recentMessages || [])
     .slice(-12)
     .map((message) => `${message.role}: ${String(message.content || '').slice(0, 500)}`)
