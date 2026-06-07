@@ -183,12 +183,3 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: String(err) }, { status: 500 });
   }
 }
-) {
-      return Response.json({
-        content: FALLBACK_FIRST_LETTER,
-        fallback: true,
-      });
-    }
-    return Response.json({ error: String(err) }, { status: 500 });
-  }
-}
