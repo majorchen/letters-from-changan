@@ -159,10 +159,12 @@ function fallbackOptions(state: PlayerState, content: string, messages: ChatMess
     return ['请王掌柜安排一间客房', '先把行李放进房里'];
   }
 
-  // Pick a fallback that hasn't been used recently
+  // Pick a fallback that hasn't been used recently, with randomness
   const recent = recentAssistantOptions(messages);
   const pool = FALLBACK_POOL.filter(opt => !recent.some(r => optionSimilarity(r, opt) > 0.8));
-  const fallback = pool.length > 0 ? pool[0] : FALLBACK_POOL[Math.floor(Math.random() * FALLBACK_POOL.length)];
+  const fallback = pool.length > 0 
+    ? pool[Math.floor(Math.random() * pool.length)] 
+    : FALLBACK_POOL[Math.floor(Math.random() * FALLBACK_POOL.length)];
 
   return withContradictionOption([fallback], contradictionOption);
 }
@@ -850,7 +852,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     }
   }
 
-  async function finishIncomingLetter(id: string, content: string, image: LetterImage) {
+  async function finishIncomingLetter(id: string, content: string) {
     const gs = gameStateRef.current;
     if (gs.letterHistory.some((letter) => letter.id === id)) return;
     const letter: LetterEntry = {
@@ -859,7 +861,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       content,
       timestamp: Date.now(),
       noticeShown: false,
-      image,
     };
     const updated: PlayerState = {
       ...gs,
@@ -915,43 +916,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.content || !data.imagePrompt) throw new Error(data.error || 'Letter generation failed');
+      if (!res.ok || !data.content) throw new Error(data.error || 'Letter generation failed');
       const id = `letter-${Date.now()}`;
-      const key = `letter:${gs.role}:${id}`;
-      const isFirstLetter = gs.letterHistory.every((letter) => letter.from !== 'linShen');
-      if (isFirstLetter) {
-        const now = Date.now();
-        await finishIncomingLetter(id, data.content, {
-          key: 'preset:first-letter-2077',
-          status: 'ready' as const,
-          prompt: data.imagePrompt,
-          url: FIRST_LETTER_IMAGE_URL,
-          createdAt: now,
-          updatedAt: now,
-        });
-        return;
-      }
-      const imgRes = await fetch('/api/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: data.imagePrompt }),
-      });
-      const imgData = await imgRes.json();
-      if (!imgRes.ok || !imgData.url) throw new Error(imgData.error || 'Letter image generation failed');
-      const image: LetterImage = {
-        key,
-        status: 'ready',
-        prompt: data.imagePrompt,
-        url: imgData.url,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      await finishIncomingLetter(id, data.content, image);
+      // Letter images are removed to ensure speed and prevent API conflicts.
+      await finishIncomingLetter(id, data.content);
     } catch (error) {
       console.error('[incoming-letter]', error);
       if (retryCount < 1) {
         preparingLetterRef.current = false;
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 2000));
         return prepareIncomingLetter(playerReply, retryCount + 1);
       }
       setSaveToast('林深还在写信...请稍后再试');
