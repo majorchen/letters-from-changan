@@ -340,17 +340,17 @@ function sanitizeState(parsed: NarrativeStateUpdate, playerState: PlayerState): 
 
 
 function visualProfilesForScene(state: PlayerState, content: string): string {
-  const knownNpcs = state.knownNPCs || [];
+  // 仅匹配在当前内容中明确提及的人物（通过名字或 ID）
   const profiles = Object.entries(state.visualProfiles || {})
     .filter(([key, profile]) =>
       key === state.role
       || content.includes(profile.name)
       || content.includes(key)
-      || knownNpcs.some(npc => npc === key || npc === profile.name),
     )
     .slice(0, 4)
     .map(([, profile]) => `${profile.name}: ${profile.description}`);
-  return profiles.length > 0 ? ` Character continuity: ${profiles.join(' ')}` : '';
+  
+  return profiles.length > 0 ? ` Characters present: ${profiles.join('; ')}` : '';
 }
 
 function latestSceneFromMessages(messages: ChatMessage[]): string | null {
