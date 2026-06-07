@@ -6,12 +6,17 @@ export function cleanNarrative(text: string): string {
     .replace(/\[OPTIONS_JSON\][\s\S]*?\[\/OPTIONS_JSON\]/gi, '')
     // Remove closed [SCENE:...] / [MAILBOX] tags anywhere
     .replace(/\[SCENE:[^\]]*\]/gi, '')
+    .replace(/【\s*SCENE\s*[：:][\s\S]*?】/gi, '')
+    .replace(/\[\s*SCENE\s*\][\s\S]*?\[\s*\/\s*SCENE\s*\]/gi, '')
+    .replace(/【\s*SCENE\s*】[\s\S]*?【\s*\/\s*SCENE\s*】/gi, '')
+    .replace(/[【\[]\s*\/?\s*scene\s*\/?\s*[】\]]/gi, '')
     .replace(/\[STATE\][\s\S]*?\[\/STATE\]/gi, '')
     .replace(/\[MAILBOX\]/gi, '')
     // Truncate from the FIRST option marker to the end (handles mid-stream)
     .replace(/(?:【\s*选项\s*[a-cA-C]?\s*】|(?:^|\n)\s*选项\s*[a-cA-C]\s*[：:]|(?:^|\n)\s*[a-cA-C]\s*[\.、:：)]|(?:^|\n)\s*[1-3]\s*[\.、:：)）])[\s\S]*$/i, '')
     // Truncate unclosed tags appearing at the end during streaming
     .replace(/\[SCENE:[\s\S]*$/i, '')
+    .replace(/【\s*SCENE[\s\S]*$/i, '')
     .replace(/\[STATE[\s\S]*$/i, '')
     .replace(/\[MAILBOX[\s\S]*$/i, '')
     .replace(/\[OPTIONS_JSON[\s\S]*$/i, '')

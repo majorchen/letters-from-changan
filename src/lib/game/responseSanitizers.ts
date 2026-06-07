@@ -15,6 +15,10 @@ function isLikelyScenePromptLeak(line: string): boolean {
 export function stripScenePromptLeak(raw: string): string {
   let content = raw;
   content = content.replace(/\[SCENE:[\s\S]*?(?:\]|$)/gi, '');
+  content = content.replace(/【\s*SCENE\s*[：:][\s\S]*?(?:】|$)/gi, '');
+  content = content.replace(/\[\s*SCENE\s*\][\s\S]*?(?:\[\s*\/\s*SCENE\s*\]|$)/gi, '');
+  content = content.replace(/【\s*SCENE\s*】[\s\S]*?(?:【\s*\/\s*SCENE\s*】|$)/gi, '');
+  content = content.replace(/[【\[]\s*\/?\s*scene\s*\/?\s*[】\]]/gi, '');
   content = content.replace(/^\s*(?:SCENE|Scene|IMAGE PROMPT|Image prompt|Visual prompt)\s*[:：].*$/gim, '');
   content = content
     .split('\n')

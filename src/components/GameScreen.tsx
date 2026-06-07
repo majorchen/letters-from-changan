@@ -88,9 +88,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox,
   });
 
-  const { shareImageUrl, shareLoading, closeShareCard, handleShareCard } = useShareCard({
+  const { shareImageUrl, shareOpen, closeShareCard, handleShareCard } = useShareCard({
     gameState,
-    messagesRef,
+    messages,
     activeLetterContent: showLetter ? letterContent : '',
     roleName: ROLES[gameState.role]?.name || '旅人',
   });
@@ -200,6 +200,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
             sizes="100vw"
             unoptimized
             className="object-cover opacity-50 transition-opacity duration-1000"
+            onLoad={() => { lastGoodImageRef.current = sceneImage; }}
             onError={() => setSceneImage(lastGoodImageRef.current)}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
@@ -268,7 +269,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         />
       )}
 
-      {(shareLoading || shareImageUrl) && <ShareModal imageUrl={shareImageUrl} isLoading={shareLoading} onClose={closeShareCard} />}
+      {shareOpen && shareImageUrl && <ShareModal imageUrl={shareImageUrl} onClose={closeShareCard} />}
       {ending && (
         <EndingSequence
           title={ending.title}

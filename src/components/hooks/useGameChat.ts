@@ -5,7 +5,7 @@ import { ensureMailboxOption, hasDiscoveredMailbox, NEW_LETTER_OPTION, shouldFor
 import { cleanNarrative, extractOptions, parseNarrativeState } from '@/lib/game/narrativeParsing';
 import { dedupeOptions, fallbackOptions, getContradictionOption, withContradictionOption } from '@/lib/game/optionLogic';
 import { sanitizeOptions, sanitizeResponse, sanitizeState, stripScenePromptLeak } from '@/lib/game/responseSanitizers';
-import { LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
+import { extractScenePrompt, fallbackSceneFromNarrative, LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
 import { streamChat } from '@/lib/game/chatStream';
 import type { PlayerState } from '@/lib/prompts';
 import { IMAGE_CONSTRAINT_SUFFIX, IMAGE_STYLE_PREFIX } from '@/lib/prompts';
@@ -18,22 +18,6 @@ interface UseGameChatOptions {
   onStateChange: (state: PlayerState) => void;
   prepareIncomingLetter: (playerReply: string | null) => void;
   setShowMailbox: Dispatch<SetStateAction<boolean>>;
-}
-
-function preloadImage(url: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const image = new window.Image();
-    let settled = false;
-    const finish = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
-      resolve(ok);
-    };
-    image.onload = () => finish(true);
-    image.onerror = () => finish(false);
-    image.src = url;
-    window.setTimeout(() => finish(false), 8000);
-  });
 }
 
 export function useGameChat({
@@ -100,12 +84,8 @@ export function useGameChat({
       });
       const data = await res.json();
       if (data.url) {
-        const canRender = await preloadImage(data.url);
-        if (canRender) {
-          lastGoodImageRef.current = data.url;
-          setSceneImage(data.url);
-          persistLatestSceneImage(data.url);
-        }
+        setSceneImage(data.url);
+        persistLatestSceneImage(data.url);
       }
     } catch { /* silently fail - keep current image */ }
     setImageLoading(false);
@@ -134,11 +114,19 @@ export function useGameChat({
       .map(m => ({ role: m.role, content: stripScenePromptLeak(m.content) }));
 
     try {
+      let sceneImageRequested = false;
       const fullContent = await streamChat(
         { messages: apiMessages, playerState: playerStateForApi },
         (streamedContent) => {
           assistantMsg.content = cleanNarrative(stripScenePromptLeak(streamedContent));
           setMessages([...newMessages, { ...assistantMsg }]);
+          const streamedSceneDesc = !sceneImageRequested ? extractScenePrompt(streamedContent) : null;
+          if (streamedSceneDesc) {
+            sceneImageRequested = true;
+            void generateSceneImage(
+              IMAGE_STYLE_PREFIX + ' ' + streamedSceneDesc + visualProfilesForScene(gs, streamedContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
+            );
+          }
         },
       );
 
@@ -152,20 +140,33 @@ export function useGameChat({
       const mailboxTriggered = rawContent.includes('[MAILBOX]');
       const updated = updateChapter(gs, rawContent, narrativeState);
 
-      const sceneMatch = rawContent.match(/\[SCENE:([^\]]+)\]/i);
-      if (sceneMatch) {
-        const sceneDesc = sceneMatch[1].trim();
-        void generateSceneImage(
-          IMAGE_STYLE_PREFIX + ' ' + sceneDesc + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-        );
+      const sceneDesc = extractScenePrompt(rawContent);
+      if (sceneDesc) {
+        if (!sceneImageRequested) {
+          sceneImageRequested = true;
+          void generateSceneImage(
+            IMAGE_STYLE_PREFIX + ' ' + sceneDesc + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
+          );
+        }
       } else {
+        let generatedFromKeyword = false;
         for (const loc of LOCATION_KEYWORDS) {
           if (rawContent.includes(loc.keyword)) {
-            void generateSceneImage(
-              IMAGE_STYLE_PREFIX + ' ' + loc.scene + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-            );
+            generatedFromKeyword = true;
+            if (!sceneImageRequested) {
+              sceneImageRequested = true;
+              void generateSceneImage(
+                IMAGE_STYLE_PREFIX + ' ' + loc.scene + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
+              );
+            }
             break;
           }
+        }
+        if (!generatedFromKeyword && !sceneImageRequested) {
+          sceneImageRequested = true;
+          void generateSceneImage(
+            IMAGE_STYLE_PREFIX + ' ' + fallbackSceneFromNarrative(updated.location, cleanContent) + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
+          );
         }
       }
 

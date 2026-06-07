@@ -2,6 +2,21 @@ import { advanceStoryTime, getStoryPhase, PlayerState } from '../prompts';
 import { normalizeEventVersions, normalizePlayerState } from '../normalize';
 import type { NarrativeStateUpdate } from './types';
 
+function shouldAcceptLocationUpdate(currentLocation: string, nextLocation: string, content: string, chapter: string): boolean {
+  const normalizedNext = nextLocation.trim();
+  if (!normalizedNext || normalizedNext.toLowerCase() === 'none') return false;
+  const looksLikePromptLeak = /scene|image prompt|visual prompt|tang dynasty|composition/i.test(normalizedNext);
+  if (looksLikePromptLeak) return false;
+
+  const isStartLocation = /长安城门外|长安城门|朱雀门外/.test(normalizedNext);
+  const contentMentionsGate = /城门|朱雀门|入城|出城|门洞|守门/.test(content);
+  if (chapter !== 'arrival' && currentLocation !== normalizedNext && isStartLocation && !contentMentionsGate) {
+    return false;
+  }
+
+  return true;
+}
+
 export function updateChapter(state: PlayerState, content: string, narrativeState?: NarrativeStateUpdate): PlayerState {
   const nextTurnCount = (state.turnCount || 0) + 1;
   const updated = normalizePlayerState({ ...state, turnCount: nextTurnCount });
@@ -58,7 +73,7 @@ export function updateChapter(state: PlayerState, content: string, narrativeStat
     updated.location = locationHint.location;
   }
 
-  if (narrativeState?.location && narrativeState.location !== 'none') {
+  if (narrativeState?.location && shouldAcceptLocationUpdate(updated.location, narrativeState.location, content, updated.chapter)) {
     updated.location = narrativeState.location.slice(0, 80);
   }
   for (const npc of narrativeState?.npcs || []) {

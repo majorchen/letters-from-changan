@@ -12,6 +12,32 @@ export const LOCATION_KEYWORDS = [
   { keyword: '坊', scene: 'A residential ward in Tang Dynasty Chang an, narrow alleys between courtyard houses, children playing, warm evening atmosphere, domestic tranquility' },
 ];
 
+export function extractScenePrompt(content: string): string | null {
+  const patterns = [
+    /\[\s*SCENE\s*:\s*([\s\S]*?)\]/i,
+    /【\s*SCENE\s*[：:]\s*([\s\S]*?)】/i,
+    /\[\s*SCENE\s*\]([\s\S]*?)\[\s*\/\s*SCENE\s*\]/i,
+    /【\s*SCENE\s*】([\s\S]*?)【\s*\/\s*SCENE\s*】/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    const scene = match?.[1]?.trim();
+    if (scene) return scene.replace(/\s+/g, ' ').slice(0, 500);
+  }
+
+  return null;
+}
+
+export function fallbackSceneFromNarrative(location: string, narrative: string): string {
+  const summary = narrative
+    .replace(/\s+/g, ' ')
+    .replace(/[【\[]\s*\/?\s*scene\s*\/?\s*[】\]]/gi, '')
+    .trim()
+    .slice(-220);
+  return `Tang Dynasty Chang'an scene at ${location || 'Chang an'}, based on this narrative moment: ${summary || 'the traveler pauses amid the city atmosphere'}, warm historical atmosphere`;
+}
+
 export function visualProfilesForScene(state: PlayerState, content: string): string {
   // 仅匹配在当前内容中明确提及的人物（通过名字或 ID）
   const profiles = Object.entries(state.visualProfiles || {})
