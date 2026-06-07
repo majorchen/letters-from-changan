@@ -758,9 +758,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         const finalMsgs = [...newMessages, { ...assistantMsg }];
         saveChatHistory(finalMsgs);
         setMessages(finalMsgs);
+        void prepareIncomingLetter(null);
         setIsStreaming(false);
         setShowMailbox(true);
-        void prepareIncomingLetter(null);
         return;
       }
 
@@ -791,10 +791,10 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       const finalMessages = [...newMessages, { ...assistantMsg, content: cleanContent, options: opts }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
-      setIsStreaming(false);
       if (shouldPrepareActiveLetter(updated)) {
         window.setTimeout(() => void prepareIncomingLetter(null), 500);
       }
+      setIsStreaming(false);
     } catch (err) {
       assistantMsg.content = '（长安城的喧嚣声突然安静了一瞬...请再试一次）';
       setMessages([...newMessages, assistantMsg]);

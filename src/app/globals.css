@@ -89,7 +89,7 @@ body {
 }
 
 .mailbox-soft-glow {
-  animation: mailbox-soft-glow 2.2s ease-in-out infinite;
+  animation: mailbox-soft-glow 1.5s ease-in-out infinite;
 }
 
 @keyframes typing-dot {
