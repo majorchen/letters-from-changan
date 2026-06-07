@@ -30,11 +30,22 @@ function cleanLetterHistory(value: unknown): LetterItem[] {
       const item = letter as Record<string, unknown>;
       return (item.from === 'linShen' || item.from === 'player') && typeof item.content === 'string';
     })
-    .slice(-12)
+    .slice(-24)
     .map((letter) => ({
       from: letter.from,
-      content: letter.content.slice(0, 1200),
+      content: letter.content.slice(0, 1000),
     }));
+}
+
+function summarizeOlderLetters(letters: LetterItem[]): string {
+  if (letters.length === 0) return '';
+  return letters
+    .map((letter, index) => {
+      const sender = letter.from === 'player' ? '玩家' : '林深';
+      return `${index + 1}. ${sender}：${letter.content.replace(/\s+/g, ' ').slice(0, 120)}`;
+    })
+    .join('\n')
+    .slice(0, 900);
 }
 
 function cleanPlayerContext(value: unknown): LetterPlayerContext {
@@ -139,7 +150,16 @@ export async function POST(req: NextRequest) {
   ];
 
   if (cleanedHistory.length > 0) {
-    for (const letter of cleanedHistory) {
+    const olderLetters = cleanedHistory.slice(0, -6);
+    const recentLetters = cleanedHistory.slice(-6);
+    const olderSummary = summarizeOlderLetters(olderLetters);
+    if (olderSummary) {
+      messages.push({
+        role: 'system',
+        content: `更早通信摘要：\n${olderSummary}`,
+      });
+    }
+    for (const letter of recentLetters) {
       messages.push({
         role: letter.from === 'linShen' ? 'assistant' : 'user',
         content: letter.content,

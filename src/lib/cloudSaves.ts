@@ -20,6 +20,8 @@ export type CloudSyncResult = {
   downloaded?: number;
 };
 
+let syncInFlight = false;
+
 export function canUseCloudSaves(): boolean {
   return isSupabaseConfigured();
 }
@@ -100,42 +102,50 @@ function rowToSave(row: CloudJourneyRow): GameSave {
 }
 
 export async function syncCloudSaves(): Promise<CloudSyncResult> {
+  if (syncInFlight) return { ok: false, message: '云存档正在同步，请稍后再试' };
+  syncInFlight = true;
   const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: '云存档未配置' };
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) return { ok: false, message: userError.message };
-  const user = userData.user;
-  if (!user) return { ok: false, message: '请先登录云存档' };
+  try {
+    if (!supabase) return { ok: false, message: '云存档未配置' };
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) return { ok: false, message: userError.message };
+    const user = userData.user;
+    if (!user) return { ok: false, message: '请先登录云存档' };
 
-  const { data, error } = await supabase
-    .from('journeys')
-    .select('*')
-    .eq('user_id', user.id);
-  if (error) return { ok: false, message: error.message };
-
-  const localSaves = loadSaves().map(normalizeGameSave);
-  const cloudSaves = (data || []).map((row) => rowToSave(row as CloudJourneyRow));
-  const mergedById = new Map<string, GameSave>();
-  for (const save of cloudSaves) mergedById.set(save.id, save);
-  for (const save of localSaves) {
-    const existing = mergedById.get(save.id);
-    if (!existing || save.updatedAt >= existing.updatedAt) {
-      mergedById.set(save.id, save);
-    }
-  }
-  const merged = [...mergedById.values()].sort((a, b) => b.updatedAt - a.updatedAt);
-  const rows = merged.map((save) => saveToRow(save, user.id));
-  if (rows.length > 0) {
-    const { error: upsertError } = await supabase
+    const { data, error } = await supabase
       .from('journeys')
-      .upsert(rows, { onConflict: 'id' });
-    if (upsertError) return { ok: false, message: upsertError.message };
+      .select('*')
+      .eq('user_id', user.id);
+    if (error) return { ok: false, message: error.message };
+
+    const localSaves = loadSaves().map(normalizeGameSave);
+    const cloudSaves = (data || []).map((row) => rowToSave(row as CloudJourneyRow));
+    const mergedById = new Map<string, GameSave>();
+    for (const save of cloudSaves) mergedById.set(save.id, save);
+    for (const save of localSaves) {
+      const existing = mergedById.get(save.id);
+      if (!existing || save.updatedAt >= existing.updatedAt) {
+        mergedById.set(save.id, save);
+      }
+    }
+    const merged = [...mergedById.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+    const rows = merged.map((save) => saveToRow(save, user.id));
+    if (rows.length > 0) {
+      let { error: upsertError } = await supabase.from('journeys').upsert(rows, { onConflict: 'id' });
+      if (upsertError) {
+        const retry = await supabase.from('journeys').upsert(rows, { onConflict: 'id' });
+        upsertError = retry.error;
+      }
+      if (upsertError) return { ok: false, message: upsertError.message };
+    }
+    saveSaves(merged);
+    return {
+      ok: true,
+      message: `云同步完成：${localSaves.length} 本地 / ${cloudSaves.length} 云端`,
+      uploaded: localSaves.length,
+      downloaded: cloudSaves.length,
+    };
+  } finally {
+    syncInFlight = false;
   }
-  saveSaves(merged);
-  return {
-    ok: true,
-    message: `云同步完成：${localSaves.length} 本地 / ${cloudSaves.length} 云端`,
-    uploaded: localSaves.length,
-    downloaded: cloudSaves.length,
-  };
 }

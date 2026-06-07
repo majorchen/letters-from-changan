@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 
 const hits = new Map<string, number[]>();
 const MAX_WINDOW_MS = 60_000;
-const MAX_REQUESTS = 20;
+const MAX_REQUESTS = Number(process.env.API_RATE_LIMIT_PER_MINUTE || 100);
 
 function cleanup() {
   const now = Date.now();

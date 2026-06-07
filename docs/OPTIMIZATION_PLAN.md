@@ -1,10 +1,23 @@
 # Letters from Chang'an - 优化计划
 
 > 2026-06-06 创建 · 按 Phase 执行，每个 Task 独立可交付
-> 最后更新：2026-06-07 01:30
+> 最后更新：2026-06-08 02:40
 > 状态标记：⬜ 待做 · 🔄 进行中 · ✅ 完成
 >
-> **进度概览：Phase 1-4 ✅ 全部完成 | Phase 5 ⬜ 待做（推后） | Phase 6 3/6 完成 | Phase 7 3/8 完成 | 补充 Task ✅**
+> **进度概览：Phase 1-7 ✅ 全部完成 | 补充 Task ✅**
+
+---
+
+## 2026-06-07 当前校准
+
+- `src/lib/prompts.ts` 已拆为 barrel re-export，原始内容按职责迁移到 `src/lib/types.ts`、`src/lib/prompts/*`、`src/lib/gameData/*`。验证：`npm run lint`、`npm run build` 均通过。
+- `normalizePlayerState` 已提取到 `src/lib/normalize.ts`，`gameState.ts` 和 `/api/chat` 共用同一套状态规范化逻辑；API 侧保留角色校验和字段长度裁剪。
+- `GameScreen.tsx` 拆分主体已完成：纯逻辑迁出到 `src/lib/game/*`，组件从 1384 行降到约 246 行；`ChatDisplay`、`OptionPanel`、`GameHeader`、`ShareModal`、`TypewriterOpening`、`useLetterFlow`、`useShareCard`、`useGameChat`、`useOpeningFlow` 已拆出，流式请求迁到 `src/lib/game/chatStream.ts`，开场文案/打字机逻辑迁到 `src/lib/game/openingFlow.ts` 和 `useOpeningFlow`。
+- `gameState.ts` 已拆为 `src/lib/gameState/*`，原 `src/lib/gameState.ts` 保留为 barrel；`saveGameState` / `saveChatHistory` 已移除 `STORAGE_KEY` / `HISTORY_KEY` 双写，以 saves-v2 为唯一真实来源。
+- `promptFormatters.ts` 已拆为 `src/lib/prompts/formatters/*`，原文件保留为兼容 re-export。
+- 信件附件方案已经和早期 Phase 2 文档分叉：当前代码不是“视频改图片”，而是信件不再附带图片，`/api/letter` 只返回 `content`，前端直接完成来信投递。
+- `package.json` 和 README 已清理不存在的 `smoke:*` / `audit` 脚本引用，当前验证命令以 `npm run lint`、`npm run build` 为准。
+- README 中部分 docs 链接指向已不存在的历史计划文件，后续应并入 Phase 7 文档清理。
 
 ---
 
@@ -339,9 +352,9 @@ function sanitizeState(parsed: ParsedState, playerState: PlayerState): ParsedSta
 
 大型重构，降低维护成本。每个 Task 独立 commit，可逐步推进。
 
-### Task 5.1 ⬜ prompts.ts 拆分
+### Task 5.1 ✅ prompts.ts 拆分
 
-**现状**：738 行，5种职责混杂。
+**原现状**：681 行，5种职责混杂。
 
 **目标结构**：
 ```
@@ -355,59 +368,124 @@ src/lib/
 ├── gameData/
 │   ├── anchors.ts         — ANCHOR_FRAGMENTS 16个锚点碎片（~120行）
 │   ├── worldEvents.ts     — WORLD_EVENTS 20个事件（~25行）
-│   ├── roles.ts           — ROLES + ROLE_CONVERGENCE + CORE_VISUAL_PROFILES（~60行）
+│   ├── npcs.ts            — CORE_VISUAL_PROFILES
+│   ├── roles.ts           — ROLES + ROLE_CONVERGENCE
 │   └── storyConfig.ts     — STORY_PERIODS + 时间/阶段函数（~60行）
 ├── gameState.ts           — 不变
 └── cloudSaves.ts          — 不变
 ```
 
-每个文件 < 200 行。旧的 `prompts.ts` 改为 re-export barrel 文件过渡，确保外部 import 不 break。
+**完成情况**：旧的 `prompts.ts` 已改为 re-export barrel 文件，确保外部 import 不 break；`buildPrompt.ts` 的 format helper 额外拆到 `promptFormatters.ts`，保证拆分后文件都低于 200 行。
+
+**验证**：`npm run lint`、`npm run build` 通过。
 
 ---
 
-### Task 5.2 ⬜ GameScreen.tsx 拆分
+### Task 5.2 ✅ GameScreen.tsx 拆分
 
-**现状**：1600+ 行单体组件。
+**原现状**：1384 行单体组件。
+
+**当前进展**：已迁出纯逻辑、显示组件和主要交互 hooks：
+- `src/lib/game/narrativeParsing.ts`：叙事正文清洗、选项提取、STATE 解析
+- `src/lib/game/optionLogic.ts`：fallback、去重、矛盾追问选项
+- `src/lib/game/mailboxLogic.ts`：信匣选项、未读信、首次邮箱触发判断
+- `src/lib/game/responseSanitizers.ts`：AI 响应 / 选项 / 状态防护层
+- `src/lib/game/sceneHelpers.ts`：场景图 fallback 和人物视觉档案拼接
+- `src/lib/game/letterHelpers.ts`：读信/回信后的续写 prompt
+- `src/lib/game/shareHelpers.ts`：分享摘要提取
+- `src/lib/game/openingFlow.ts`：角色开场文案、默认场景、开场消息构建
+- `src/lib/game/chatStream.ts`：聊天 API 请求、SSE 解析、重试兜底
+- `src/components/ChatDisplay.tsx`：消息列表渲染、滚动锚点、场景图展示
+- `src/components/OptionPanel.tsx`：选项按钮、自由输入切换、发送中态
+- `src/components/GameHeader.tsx`：顶部状态栏、离开、分享、信匣入口
+- `src/components/ShareModal.tsx`：分享卡片预览弹窗
+- `src/components/TypewriterOpening.tsx`：开场打字机展示页
+- `src/components/hooks/useLetterFlow.ts`：信件弹窗、信箱、回信、来信完成回调
+- `src/components/hooks/useShareCard.ts`：分享卡片 canvas、二维码、下载状态
+- `src/components/hooks/useGameChat.ts`：聊天发送、状态更新、场景图生成、结局触发
+- `src/components/hooks/useOpeningFlow.ts`：历史恢复、开场 phase、打字机流程
+
+**验证**：`npm run lint`、`npm run build` 通过。
+
+**完成情况**：已继续抽出开场常量 / 游戏 phase hook，`GameScreen.tsx` 约 246 行。
 
 **目标结构**：
 ```
 src/components/
 ├── GameScreen.tsx          — 状态协调（~300行）
+├── GameHeader.tsx          — 顶部状态栏
 ├── ChatDisplay.tsx         — 消息列表渲染 + 滚动
 ├── OptionPanel.tsx         — 选项按钮 / 自由输入切换
-├── LetterSystem.tsx        — 信件生成、通知
+├── ShareModal.tsx          — 分享卡片弹窗
+├── TypewriterOpening.tsx   — 开场打字机展示
+├── LetterModal.tsx         — 信件阅读 / 回信 UI（既有）
+├── LetterBox.tsx           — 信箱 UI（既有）
 └── hooks/
     ├── useGameChat.ts      — 聊天流式请求 + 解析
     ├── useLetterFlow.ts    — 信件生成流程（Phase 2 后已无轮询）
-    └── useGameState.ts     — PlayerState 读写 + 持久化
+    └── useShareCard.ts     — 分享图生成
 ```
 
 ---
 
-### Task 5.3 ⬜ normalizePlayerState 去重
+### Task 5.3 ✅ normalizePlayerState 去重
 
 **现状**：`gameState.ts` 和 `api/chat/route.ts` 各有一份独立实现，字段默认值不同步。
 
 **改法**：提取到 `src/lib/normalize.ts`，前后端 import 同一份。
 
----
+**完成情况**：新增 `normalizePlayerState()` 和 `normalizePlayerStateForApi()`，前端存档使用前者，`/api/chat` 使用后者以保留输入校验、长度裁剪和角色白名单。
 
-### Task 5.4 ⬜ saveGameState 双写清理
-
-**现状**：同时写 saves 数组和单独 localStorage key（历史遗留双格式），`clearLegacyStorage()` 每次操作都执行。
-
-**改法**：确认无旧格式用户后，移除双写和 `clearLegacyStorage()` 调用。
+**验证**：`npm run lint`、`npm run build` 通过。
 
 ---
 
-### Task 5.5 ⬜ video/route.ts 拆分
+### Task 5.4 ✅ gameState.ts 拆分 + saveGameState 双写清理
 
-**现状**：414 行，同时处理创建、轮询、持久化、格式归一化。
+**现状**：`gameState.ts` 同时承担类型定义、存档仓储、当前游戏读写、聊天历史和章节推进；`saveGameState()` / `saveChatHistory()` 同时写 saves 数组和单独 localStorage key（历史遗留双格式），`clearLegacyStorage()` 每次操作都执行。
 
 **改法**：
-- 提取 `src/lib/videoHelpers.ts`：`persistVideoAsset()`、`normalizeAgnesResponse()`
-- `route.ts` 只保留 HTTP handler（~150行）
-- 注意：Phase 2 完成后信件不再用视频，但其他功能（如结局）可能仍需要
+- 拆为 `src/lib/gameState/types.ts`、`saveStorage.ts`、`activeGameStorage.ts`、`chapterProgression.ts`、`index.ts`
+- 保留 `@/lib/gameState` barrel 出口，避免现有 import 断裂
+- 以 saves-v2 为唯一真实来源，移除 `STORAGE_KEY` / `HISTORY_KEY` 双写
+- 保留一次性 legacy 清理函数，但不再在每次读写时重复执行
+
+**完成情况**：已完成；`src/lib/gameState.ts` 现在只 re-export `./gameState/index`。
+
+**验证**：`npm run lint`、`npm run build` 通过。
+
+---
+
+### Task 5.5 ✅ 移除未使用视频管线
+
+**原现状**：当前游戏前端已不再调用 `/api/video`，视频相关只剩 README / docs / `src/app/api/video/route.ts` / `src/lib/videoCache.ts` 等历史遗留。
+
+**改法**：
+- 删除 `src/app/api/video/route.ts`、`src/lib/videoCache.ts`
+- 清理 README 中 Agnes video 环境变量和旧视频管线链接
+- 更新 docs，避免后续继续围绕已废弃视频能力做优化
+
+**完成情况**：已删除 `src/app/api/video/route.ts` 和 `src/lib/videoCache.ts`；README 已移除 Agnes video 模型、`AGNES_VIDEO_MODEL` 和失效视频计划链接。
+
+**验证**：`npm run lint`、`npm run build` 通过。
+
+---
+
+### Task 5.6 ✅ promptFormatters.ts 拆分
+
+**现状**：物理行数约 159 行，但长模板字符串和规则密度高，实际维护成本偏高；同时包含章节引导、记忆格式化、因果回声、世界事件/锚点/汇流规则。
+
+**改法**：
+- `src/lib/prompts/formatters/chapterGuides.ts`
+- `src/lib/prompts/formatters/memoryFormatters.ts`
+- `src/lib/prompts/formatters/echoFormatters.ts`
+- `src/lib/prompts/formatters/worldFormatters.ts`
+- `src/lib/prompts/formatters/index.ts`
+- 保留 `src/lib/prompts/promptFormatters.ts` 作为兼容 re-export
+
+**完成情况**：已完成；`promptFormatters.ts` 现在只 re-export `./formatters`。
+
+**验证**：`npm run lint`、`npm run build` 通过。
 
 ---
 
@@ -435,7 +513,7 @@ src/components/
 
 ---
 
-### Task 6.3 ⬜ localStorage 容量治理
+### Task 6.3 ✅ localStorage 容量治理
 
 **改法**：
 - 加 `getStorageUsage()` 检测当前占用
@@ -444,7 +522,7 @@ src/components/
 
 ---
 
-### Task 6.4 ⬜ 云存档事务安全
+### Task 6.4 ✅ 云存档事务安全
 
 **改法**：
 - `syncCloudSaves()` 加乐观锁（`updated_at` 版本号），写入前校验版本
@@ -462,9 +540,9 @@ src/components/
 
 ---
 
-### Task 6.6 ⬜ importSaves schema 验证
+### Task 6.6 ✅ importSaves schema 验证
 
-**改法**：用 zod 对导入的 JSON 做 schema 验证，拒绝不符合 `PlayerState` 结构的数据。
+**完成情况**：未引入新依赖，使用手写 schema guard 校验 `GameSave`、`PlayerState`、`ChatMessage` 基础结构；导入时裁剪消息数量和内容长度。
 
 ---
 
@@ -474,11 +552,11 @@ src/components/
 
 **文件**：`src/app/layout.tsx`
 
-**改法**：加 `og:image`（用 `bg-changan.webp`）、`og:description`（"你在唐朝收到了一封来自2077年的信"）、`twitter:card`。
+**完成情况**：已配置 `og:image`、`og:description`、`twitter:card`，并补充 `metadataBase`，build 不再出现 metadataBase warning。
 
 ---
 
-### Task 7.2 ⬜ 信件历史摘要压缩
+### Task 7.2 ✅ 信件历史摘要压缩
 
 **现状**：letter route 只取最近12封信（`.slice(-12)`），长线玩家丢失早期连贯性。
 
@@ -486,27 +564,27 @@ src/components/
 
 ---
 
-### Task 7.3 ⬜ eventVersions 去重
+### Task 7.3 ✅ eventVersions 去重
 
-**改法**：STATE 解析时对 eventVersions 做 dedup（同一事件+同一来源只保留最新说法）。
-
----
-
-### Task 7.4 ⬜ Accessibility 基础
-
-**改法**：核心交互元素加 `aria-label`，选项按钮加 `:focus-visible` 样式。
+**完成情况**：新增 `normalizeEventVersions()`，导入存档、API 状态归一化和 `updateChapter()` 都会裁剪并归一化 event/source/version，同一事件+来源只保留最新版本。
 
 ---
 
-### Task 7.5 ⬜ CHANGELOG 拆分
+### Task 7.4 ✅ Accessibility 基础
 
-**改法**：拆出 `docs/DESIGN_DECISIONS.md` 存放9个核心设计决策，CHANGELOG 只保留版本流水。
+**完成情况**：核心入口、选项按钮、输入框、发送、顶部栏和分享弹窗补充 `aria-label` / `focus-visible` 样式。
 
 ---
 
-### Task 7.6 ⬜ 跨标签页检测
+### Task 7.5 ✅ 设计决策文档拆分
 
-**改法**：监听 `window.addEventListener('storage', ...)`，检测到外部写入时提示"其他标签页正在游玩此存档"。
+**完成情况**：新增 `docs/DESIGN_DECISIONS.md`，沉淀核心产品与技术决策；README 已加入链接。
+
+---
+
+### Task 7.6 ✅ 跨标签页检测
+
+**完成情况**：新增 `useStorageHealth()`，监听 saves/active save 的 storage event，检测到其他标签页写入时显示游戏内提示。
 
 ---
 
@@ -543,8 +621,8 @@ src/components/
 | **Phase 3** | 场景图镜头感 | 30分钟 | ✅ 完成 | 画面从摆拍变电影感 |
 | **Phase 4** | 代码防护层 | 1-2小时 | ✅ 完成 | prompt 规则不再脆弱 |
 | **Phase 5** | 架构重构 | 2-3天 | ⬜ 推后 | 1600行→300行，可维护 |
-| **Phase 6** | 可靠性与安全 | 1-2天 | 🔄 3/6 完成 | API 保护 + 容错 + 数据安全 |
-| **Phase 7** | 体验打磨 | 1天 | 🔄 3/8 完成 | 传播、无障碍、代码整洁 |
+| **Phase 6** | 可靠性与安全 | 1-2天 | ✅ 完成 | API 保护 + 容错 + 数据安全 |
+| **Phase 7** | 体验打磨 | 1天 | ✅ 完成 | 传播、无障碍、代码整洁 |
 | **补充** | 场景图清理 | 15分钟 | ✅ 完成 | 防 localStorage 膨胀 |
 
 **已完成补充修复（2026-06-07）**：

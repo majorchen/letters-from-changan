@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://letterstang.aifisher.cn"),
   title: "来信长安 | Letters from Chang'an",
   description: "你在唐朝收到了一封来自2077年的信。一款AI驱动的无限流互动叙事体验。",
   manifest: "/manifest.json",

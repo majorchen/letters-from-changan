@@ -267,7 +267,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
           {hasSaves && (
             <button
               onClick={() => setShowSavePicker(true)}
-              className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/30 border border-amber-600/40 text-amber-200 hover:bg-amber-700/50 transition-all animate-pulse-glow backdrop-blur-sm"
+              className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/30 border border-amber-600/40 text-amber-200 hover:bg-amber-700/50 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400/70 animate-pulse-glow backdrop-blur-sm"
             >
               继续旅程
             </button>
@@ -276,7 +276,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
           {!cloudEmail && canUseCloudSaves() && (
             <button
               onClick={() => setShowLoginModal(true)}
-              className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/85 text-stone-50 hover:bg-amber-600 transition-all backdrop-blur-sm"
+              className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/85 text-stone-50 hover:bg-amber-600 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400/70 backdrop-blur-sm"
             >
               登录 · 跨设备同步旅程
             </button>
@@ -291,7 +291,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
               <button
                 key={key}
                 onClick={() => onStart(key)}
-                className="group p-4 rounded-xl border border-amber-700/25 bg-stone-900/60 backdrop-blur-sm hover:bg-amber-900/40 hover:border-amber-500/40 transition-all text-left"
+                className="group p-4 rounded-xl border border-amber-700/25 bg-stone-900/60 backdrop-blur-sm hover:bg-amber-900/40 hover:border-amber-500/40 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400/70 text-left"
               >
                 <div className="text-2xl mb-1">{role.emoji}</div>
                 <div className="text-amber-200 font-medium text-sm">{role.name}</div>
@@ -315,7 +315,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
                 <h2 className="font-handwriting text-2xl text-amber-200/90">选择一段旅程</h2>
                 <p className="text-amber-500/35 text-xs mt-1">由近及远，翻开你留下的长安</p>
               </div>
-              <button onClick={() => setShowSavePicker(false)} className="text-amber-500/45 hover:text-amber-300 text-sm">
+              <button onClick={() => setShowSavePicker(false)} aria-label="关闭存档选择" className="text-amber-500/45 hover:text-amber-300 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400/70">
                 关闭
               </button>
             </div>

@@ -8,12 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "supabase:status": "supabase status",
-    "supabase:push": "supabase db push",
-    "smoke:chat": "node scripts/smoke-chat.mjs",
-    "smoke:letter": "node scripts/smoke-letter.mjs",
-    "playtest:longrun": "node scripts/playtest-longrun.mjs",
-    "roadmap:audit": "node scripts/roadmap-audit.mjs",
-    "mechanics:audit": "node scripts/mechanics-audit.mjs"
+    "supabase:push": "supabase db push"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
