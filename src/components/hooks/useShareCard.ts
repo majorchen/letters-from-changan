@@ -1,4 +1,4 @@
-import { useState, type MutableRefObject } from 'react';
+import { useRef, useState, type MutableRefObject } from 'react';
 import QRCode from 'qrcode';
 import type { ChatMessage } from '@/lib/gameState';
 import { getShareExcerpt } from '@/lib/game/shareHelpers';
@@ -46,11 +46,24 @@ interface UseShareCardOptions {
 
 export function useShareCard({ gameState, messagesRef, activeLetterContent, roleName }: UseShareCardOptions) {
   const [shareImageUrl, setShareImageUrl] = useState('');
+  const [shareLoading, setShareLoading] = useState(false);
+  const shareRunRef = useRef(0);
+
+  function closeShareCard() {
+    shareRunRef.current += 1;
+    setShareImageUrl('');
+    setShareLoading(false);
+  }
 
   async function handleShareCard(overrideExcerpt = '') {
     const shareExcerpt = overrideExcerpt || getShareExcerpt(messagesRef.current, activeLetterContent);
     if (!shareExcerpt) return;
+    const runId = shareRunRef.current + 1;
+    shareRunRef.current = runId;
+    setShareImageUrl('');
+    setShareLoading(true);
 
+    try {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1680;
@@ -170,13 +183,28 @@ export function useShareCard({ gameState, messagesRef, activeLetterContent, role
     ctx.font = '26px serif';
     ctx.fillText('AI互动叙事 · 每次都是唯一的故事', canvas.width / 2, 1660);
 
-    const dataUrl = canvas.toDataURL('image/png');
-    setShareImageUrl(dataUrl);
+    const imageUrl = await new Promise<string>((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob ? URL.createObjectURL(blob) : canvas.toDataURL('image/png')),
+        'image/jpeg',
+        0.9,
+      );
+    });
+    if (shareRunRef.current === runId) {
+      setShareImageUrl(imageUrl);
+    }
+    } finally {
+      if (shareRunRef.current === runId) {
+        setShareLoading(false);
+      }
+    }
   }
 
   return {
     shareImageUrl,
     setShareImageUrl,
+    shareLoading,
+    closeShareCard,
     handleShareCard,
   };
 }

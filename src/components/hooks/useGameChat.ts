@@ -4,7 +4,7 @@ import { saveChatHistory, saveGameState, updateChapter } from '@/lib/gameState';
 import { ensureMailboxOption, hasDiscoveredMailbox, NEW_LETTER_OPTION, shouldForceFirstMailbox, shouldPrepareActiveLetter } from '@/lib/game/mailboxLogic';
 import { cleanNarrative, extractOptions, parseNarrativeState } from '@/lib/game/narrativeParsing';
 import { dedupeOptions, fallbackOptions, getContradictionOption, withContradictionOption } from '@/lib/game/optionLogic';
-import { sanitizeOptions, sanitizeResponse, sanitizeState } from '@/lib/game/responseSanitizers';
+import { sanitizeOptions, sanitizeResponse, sanitizeState, stripScenePromptLeak } from '@/lib/game/responseSanitizers';
 import { LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
 import { streamChat } from '@/lib/game/chatStream';
 import type { PlayerState } from '@/lib/prompts';
@@ -18,6 +18,22 @@ interface UseGameChatOptions {
   onStateChange: (state: PlayerState) => void;
   prepareIncomingLetter: (playerReply: string | null) => void;
   setShowMailbox: Dispatch<SetStateAction<boolean>>;
+}
+
+function preloadImage(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const image = new window.Image();
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    image.onload = () => finish(true);
+    image.onerror = () => finish(false);
+    image.src = url;
+    window.setTimeout(() => finish(false), 8000);
+  });
 }
 
 export function useGameChat({
@@ -84,9 +100,12 @@ export function useGameChat({
       });
       const data = await res.json();
       if (data.url) {
-        lastGoodImageRef.current = data.url;
-        setSceneImage(data.url);
-        persistLatestSceneImage(data.url);
+        const canRender = await preloadImage(data.url);
+        if (canRender) {
+          lastGoodImageRef.current = data.url;
+          setSceneImage(data.url);
+          persistLatestSceneImage(data.url);
+        }
       }
     } catch { /* silently fail - keep current image */ }
     setImageLoading(false);
@@ -112,13 +131,13 @@ export function useGameChat({
     const apiMessages = [...msgs, userMsg]
       .filter(m => m.role !== 'system')
       .slice(-20)
-      .map(m => ({ role: m.role, content: m.content }));
+      .map(m => ({ role: m.role, content: stripScenePromptLeak(m.content) }));
 
     try {
       const fullContent = await streamChat(
         { messages: apiMessages, playerState: playerStateForApi },
         (streamedContent) => {
-          assistantMsg.content = cleanNarrative(streamedContent);
+          assistantMsg.content = cleanNarrative(stripScenePromptLeak(streamedContent));
           setMessages([...newMessages, { ...assistantMsg }]);
         },
       );

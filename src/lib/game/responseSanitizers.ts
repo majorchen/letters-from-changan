@@ -2,8 +2,30 @@ import type { ChatMessage, NarrativeStateUpdate } from '@/lib/gameState';
 import type { PlayerState } from '@/lib/prompts';
 import { isLetterRelatedOption } from './mailboxLogic';
 
-export function sanitizeResponse(raw: string, state: PlayerState): string {
+const SCENE_PROMPT_LINE_PATTERN = /\b(scene prompt|image prompt|visual prompt|prompt:|aged silk|ink wash|watercolor|cinematic|wide composition|no photorealism|photorealistic|tang dynasty|chang'?an|ancient chinese|historical chinese|illustration|brushwork|muted colors|soft lighting|ambient light|composition)\b/i;
+
+function isLikelyScenePromptLeak(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  const asciiLetters = (trimmed.match(/[A-Za-z]/g) || []).length;
+  const cjkChars = (trimmed.match(/[\u3400-\u9fff]/g) || []).length;
+  return asciiLetters >= 24 && asciiLetters > cjkChars * 2 && SCENE_PROMPT_LINE_PATTERN.test(trimmed);
+}
+
+export function stripScenePromptLeak(raw: string): string {
   let content = raw;
+  content = content.replace(/\[SCENE:[\s\S]*?(?:\]|$)/gi, '');
+  content = content.replace(/^\s*(?:SCENE|Scene|IMAGE PROMPT|Image prompt|Visual prompt)\s*[:：].*$/gim, '');
+  content = content
+    .split('\n')
+    .filter((line) => !isLikelyScenePromptLeak(line))
+    .join('\n');
+  content = content.replace(/\n{3,}/g, '\n\n');
+  return content.trim();
+}
+
+export function sanitizeResponse(raw: string, state: PlayerState): string {
+  let content = stripScenePromptLeak(raw);
   content = content.replace(/信上写着[：:][\s\S]*/g, '');
   content = content.replace(/信中说[：:][\s\S]*/g, '');
   content = content.replace(/林深写道[：:][\s\S]*/g, '');

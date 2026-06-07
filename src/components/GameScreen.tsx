@@ -88,7 +88,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox,
   });
 
-  const { shareImageUrl, setShareImageUrl, handleShareCard } = useShareCard({
+  const { shareImageUrl, shareLoading, closeShareCard, handleShareCard } = useShareCard({
     gameState,
     messagesRef,
     activeLetterContent: showLetter ? letterContent : '',
@@ -210,7 +210,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <span className="rounded-full border border-amber-500/15 bg-stone-950/70 px-3 py-1 text-xs text-amber-200/70">{saveToast}</span>
         </div>
       )}
-      {imageLoading && !sceneImage && (
+      {imageLoading && (
         <div className="absolute inset-x-0 top-4 z-30 text-center">
           <span className="text-amber-600/20 text-xs">场景浮现中...</span>
         </div>
@@ -268,7 +268,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         />
       )}
 
-      {shareImageUrl && <ShareModal imageUrl={shareImageUrl} onClose={() => setShareImageUrl('')} />}
+      {(shareLoading || shareImageUrl) && <ShareModal imageUrl={shareImageUrl} isLoading={shareLoading} onClose={closeShareCard} />}
       {ending && (
         <EndingSequence
           title={ending.title}

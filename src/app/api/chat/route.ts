@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { buildSystemPrompt } from '@/lib/prompts';
 import { normalizePlayerStateForApi } from '@/lib/normalize';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { stripScenePromptLeak } from '@/lib/game/responseSanitizers';
 
 type ClientMessage = {
   role: string;
@@ -20,7 +21,7 @@ function cleanMessages(messages: unknown): { role: 'user' | 'assistant'; content
     .slice(-20)
     .map((message) => ({
       role: message.role as 'user' | 'assistant',
-      content: message.content.slice(0, 2000),
+      content: stripScenePromptLeak(message.content).slice(0, 2000),
     }));
 }
 

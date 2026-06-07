@@ -22,7 +22,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
   const hasSaves = saves.length > 0;
   const [showSavePicker, setShowSavePicker] = useState(false);
   const [saveNotice, setSaveNotice] = useState('');
-  const [cloudEmail, setCloudEmail] = useState('');
+  const [cloudEmail, setCloudEmail] = useState<string | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSentTo, setOtpSentTo] = useState('');
@@ -153,7 +153,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
   }
 
   function renderLoginModal() {
-    if (!canUseCloudSaves() || cloudEmail) return null;
+    if (!canUseCloudSaves() || cloudEmail === null || cloudEmail) return null;
     return (
       <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeLoginModal} />
@@ -273,7 +273,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
             </button>
           )}
 
-          {!cloudEmail && canUseCloudSaves() && (
+          {cloudEmail !== null && !cloudEmail && canUseCloudSaves() && (
             <button
               onClick={() => setShowLoginModal(true)}
               className="w-full mb-5 py-3.5 rounded-lg bg-amber-700/85 text-stone-50 hover:bg-amber-600 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400/70 backdrop-blur-sm"
@@ -301,7 +301,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
           </div>
 
           <p className="text-amber-800/30 text-xs mt-6">
-            {cloudEmail ? `☁️ 已登录 · ${cloudEmail}` : '未登录 · 旅程仅保存在本设备'}
+            {cloudEmail === null ? '正在检查云同步...' : cloudEmail ? `☁️ 已登录 · ${cloudEmail}` : '未登录 · 旅程仅保存在本设备'}
           </p>
         </div>
       </div>
@@ -354,6 +354,8 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
                         登出
                       </button>
                     </div>
+                  ) : cloudEmail === null ? (
+                    <span className="text-xs text-amber-500/45">正在检查云同步...</span>
                   ) : (
                     <button onClick={() => setShowLoginModal(true)} className="text-xs text-amber-400/60 hover:text-amber-300/85">
                       登录可跨设备同步
