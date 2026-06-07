@@ -91,10 +91,20 @@ function cleanNarrative(text: string): string {
 
 // Extract option texts from raw AI content
 function extractOptions(text: string): string[] {
-  const structured = text.match(/\[OPTIONS_JSON\]([\s\S]*?)\[\/OPTIONS_JSON\]/i);
+  // Support both strict and loose spacing in tags
+  const structured = text.match(/\[\s*OPTIONS_JSON\s*\]([\s\S]*?)\[\s*\/OPTIONS_JSON\s*\]/i);
   if (structured) {
     try {
-      const parsed = JSON.parse(structured[1].trim());
+      const content = structured[1].trim();
+      let parsed: string[] = [];
+      // Robust JSON parsing: handle array or raw lines
+      if (content.startsWith('[') && content.endsWith(']')) {
+        parsed = JSON.parse(content);
+      } else {
+        // Fallback for AI occasionally outputting raw strings instead of JSON array
+        parsed = content.split(/[,\n]/).map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+      }
+
       if (Array.isArray(parsed)) {
         return Array.from(new Set(
           parsed
@@ -113,7 +123,7 @@ function extractOptions(text: string): string[] {
     /【\s*选项\s*[A-C]?\s*】\s*([^\n【\[]+)/gi,
     /(?:^|\n)\s*选项\s*[A-C]\s*[：:]\s*([^\n【\[]+)/gi,
     /(?:^|\n)\s*[A-C]\s*[\.、:：)]\s*([^\n【\[]+)/gi,
-    /(?:^|\n)\s*[1-3]\s*[\.、:：)]\s*([^\n【\[]+)/g,
+    /(?:^|\n)\s*[1-3]\s*[\.、:：)）]\s*([^\n【\[]+)/g,
   ];
 
   for (const pattern of patterns) {
@@ -128,16 +138,33 @@ function extractOptions(text: string): string[] {
 }
 
 function isGenericOption(option: string): boolean {
-  return /^(继续观察|仔细查看|换个角度试探一句|打听消息|看看周围|静观其变|等待变化|记下来|离开这里)$/.test(option.trim());
+  const normalized = option.trim().replace(/[.。,，… ]+$/, '');
+  return /^(继续观察|仔细查看|换个角度试探一句|打听消息|看看周围|静观其变|等待变化|记下来|离开这里|继续前进|四处打听|四处看看|寻找线索)$/.test(normalized);
 }
 
-function fallbackOptions(state: PlayerState, content: string, playerInput = ''): string[] {
+const FALLBACK_POOL = [
+  '静观其变...',
+  '四处打探下...',
+  '留意周围动静...',
+  '暂且按兵不动...',
+  '看看还有什么细节...',
+  '寻个由头再问问...',
+];
+
+function fallbackOptions(state: PlayerState, content: string, messages: ChatMessage[], playerInput = ''): string[] {
   const contradictionOption = getContradictionOption(state);
   const context = `${playerInput}\n${content}`;
+  
   if (state.chapter === 'arrival' && /(客栈|客房|房间|投宿|安顿|住下|王掌柜)/.test(context)) {
     return ['请王掌柜安排一间客房', '先把行李放进房里'];
   }
-  return withContradictionOption(['静观其变...'], contradictionOption);
+
+  // Pick a fallback that hasn't been used recently
+  const recent = recentAssistantOptions(messages);
+  const pool = FALLBACK_POOL.filter(opt => !recent.some(r => optionSimilarity(r, opt) > 0.8));
+  const fallback = pool.length > 0 ? pool[0] : FALLBACK_POOL[Math.floor(Math.random() * FALLBACK_POOL.length)];
+
+  return withContradictionOption([fallback], contradictionOption);
 }
 
 function normalizeOptionForComparison(option: string): string {
@@ -156,21 +183,34 @@ function optionSimilarity(a: string, b: string): number {
 function recentAssistantOptions(messages: ChatMessage[]): string[] {
   return messages
     .filter((message) => message.role === 'assistant' && Array.isArray(message.options))
-    .slice(-6)
+    .slice(-10) // Check further back for variety
     .flatMap((message) => message.options || []);
 }
 
-function dedupeOptions(options: string[], messages: ChatMessage[]): string[] {
+function dedupeOptions(options: string[], messages: ChatMessage[], optionsSource: 'model' | 'fallback' | 'final' = 'model'): string[] {
   const recent = recentAssistantOptions(messages);
   const result: string[] = [];
+  
   for (const option of options) {
     if (!option.trim()) continue;
-    if (isGenericOption(option)) continue;
+    
+    // Model generated options shouldn't be generic
+    if (optionsSource === 'model' && isGenericOption(option)) continue;
+    
+    // Similarity checks to avoid repetition
     if (result.some((existing) => optionSimilarity(existing, option) >= 0.78)) continue;
     if (recent.some((existing) => optionSimilarity(existing, option) >= 0.84)) continue;
+    
     result.push(option);
     if (result.length >= 3) break;
   }
+  
+  // Safety: NEVER return an empty array if we have candidates.
+  // If everything was filtered but it's the final pass or fallback, keep at least one.
+  if (result.length === 0 && options.length > 0) {
+    return [options[0]];
+  }
+  
   return result;
 }
 
