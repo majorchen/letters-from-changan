@@ -117,22 +117,6 @@ const FALLBACK_FIRST_LETTER = `陌生的收信人：
 
 林深`;
 
-const FALLBACK_LETTER_SCENES = [
-  'Medium shot, slightly high angle. Lin Shen sits alone at a translucent desk, one hand hovering over a glowing ceramic mailbox, head bowed, eyes soft with hesitation. Dim apartment, muted blue-grey tones, quiet solitude',
-  'Wide shot, eye-level. Lin Shen stands by a floor-to-ceiling window, back half-turned, one palm pressed against the glass. Empty apartment behind him, cool evening atmosphere, distant city silhouette',
-  'Close-up, low angle. Lin Shen crouches beside the ceramic mailbox on a cluttered desk, fingers tracing its rim, brows furrowed with concentration, lips slightly parted. Warm amber tones, intimate quiet mood',
-];
-
-const LIN_SHEN_VISUAL = 'Character continuity: 林深: A slim Chinese man in his early thirties from 2077, tired face, short slightly untidy black hair, quiet dark eyes, plain graphite-grey future jacket with subtle worn seams.';
-
-function buildLetterImagePrompt(sceneDesc: string): string {
-  return `${IMAGE_STYLE_PREFIX} ${sceneDesc}. Near-future Chinese city, restrained believable technology. ${LIN_SHEN_VISUAL} ${IMAGE_CONSTRAINT_SUFFIX}`;
-}
-
-function fallbackLetterScene(letterNumber: number): string {
-  return FALLBACK_LETTER_SCENES[(letterNumber - 1) % FALLBACK_LETTER_SCENES.length];
-}
-
 export async function POST(req: NextRequest) {
   const rateLimited = checkRateLimit(req);
   if (rateLimited) return rateLimited;
@@ -163,20 +147,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const sceneInstruction = `\n\n写完信件正文后，另起一行输出配图标记：\n[LETTER_SCENE:shot type(close-up/medium/wide) + camera angle + Lin Shen's specific action and facial expression matching this letter's emotional tone + gaze direction(NOT looking at camera) + 2077 environment detail + lighting. 60 words max, English]`;
-
   if (cleanedReply) {
     messages.push({
       role: 'user',
-      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写林深的下一封回信。${sceneInstruction}`,
+      content: `${cleanedReply}\n\n${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写林深的下一封回信。`,
     });
   } else if (cleanedHistory.length > 0) {
     messages.push({
       role: 'user',
-      content: `请根据以上完整通信历史，让林深在一段沉默后主动写来下一封信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 可以承接玩家最近一封回信里的具体内容，也可以主动报告2077刚发生的一件小事或追问长安近况。不要假装玩家刚刚又回了信，不要重复之前已经写过的信，不要重新写第一封信。${sceneInstruction}`,
+      content: `请根据以上完整通信历史，让林深在一段沉默后主动写来下一封信。${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 可以承接玩家最近一封回信里的具体内容，也可以主动报告2077刚发生的一件小事或追问长安近况。不要假装玩家刚刚又回了信，不要重复之前已经写过的信，不要重新写第一封信。`,
     });
   } else {
-    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写第一封信给这位刚到长安的外乡人。${sceneInstruction}` });
+    messages.push({ role: 'user', content: `${getLetterArcInstruction(nextLetterNumber)}${worldEchoInstruction}${keyLetterInstruction} 请写第一封信给这位刚到长安的外乡人。` });
   }
 
   try {
@@ -187,18 +169,23 @@ export async function POST(req: NextRequest) {
       max_tokens: 400,
     });
 
-    const rawContent = response.choices[0]?.message?.content || '';
-    const sceneMatch = rawContent.match(/\[LETTER_SCENE:([^\]]+)\]/i);
-    const content = rawContent.replace(/\[LETTER_SCENE:[^\]]+\]/i, '').trim();
-    const sceneDesc = sceneMatch?.[1]?.trim() || fallbackLetterScene(nextLetterNumber);
-    const imagePrompt = buildLetterImagePrompt(sceneDesc);
-    return Response.json({ content, imagePrompt });
+    const content = response.choices[0]?.message?.content || '';
+    // Strip any lingering scene tags just in case
+    const cleanContent = content.replace(/\[LETTER_SCENE:([^\]]+)\]/i, '').trim();
+    return Response.json({ content: cleanContent });
   } catch (err) {
     if (!cleanedReply && cleanedHistory.length === 0) {
-      const imagePrompt = buildLetterImagePrompt(fallbackLetterScene(1));
       return Response.json({
         content: FALLBACK_FIRST_LETTER,
-        imagePrompt,
+        fallback: true,
+      });
+    }
+    return Response.json({ error: String(err) }, { status: 500 });
+  }
+}
+) {
+      return Response.json({
+        content: FALLBACK_FIRST_LETTER,
         fallback: true,
       });
     }

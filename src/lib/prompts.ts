@@ -670,18 +670,6 @@ export interface LetterNotification {
   noticeShown?: boolean;
 }
 
-export interface LetterImage {
-  key: string;
-  status: "ready";
-  prompt: string;
-  url: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-/** @deprecated Use LetterImage instead */
-export type LetterVideo = LetterImage;
-
 export interface LetterEntry {
   id: string;
   from: "linShen" | "player";
@@ -689,15 +677,11 @@ export interface LetterEntry {
   timestamp: number;
   readAt?: number;
   noticeShown?: boolean;
-  image?: LetterImage;
-  /** @deprecated Migrated to image */
-  video?: LetterImage;
 }
 
 export interface PendingLetter {
   id: string;
   content: string;
-  image?: LetterImage;
 }
 
 export interface VisualProfile {

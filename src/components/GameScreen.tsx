@@ -47,7 +47,6 @@ const GUEST_FIRST_LETTER_TOAST_KEY = 'letters-from-changan-guest-first-letter-to
 const CHAT_TIMEOUT_MS = 45_000;
 const NEW_LETTER_OPTION = '信匣里有一封新信';
 const ACTIVE_LETTER_INTERVAL_TURNS = 8;
-const FIRST_LETTER_IMAGE_URL = '/linshen-first-letter.webp';
 
 const EVENT_LABELS: Record<string, string> = {
   anchor_inn_basement_future: '客栈暗处的未来痕迹',
@@ -654,22 +653,9 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   useEffect(() => {
     const pending = gameState.mailbox?.pending;
     if (!pending || preparingLetterRef.current) return;
-    if (pending.image) {
-      void finishIncomingLetter(pending.id, pending.content, pending.image);
-      return;
-    }
-    const current = gameStateRef.current;
-    const updated = {
-      ...current,
-      mailbox: {
-        ...current.mailbox,
-        pending: undefined,
-        lastGeneratedAtTurn: Math.max(0, current.turnCount - ACTIVE_LETTER_INTERVAL_TURNS + 2),
-      },
-    };
-    gameStateRef.current = updated;
-    onStateChange(updated);
-    saveGameState(updated);
+    
+    // Letters no longer have images; just finish the delivery.
+    void finishIncomingLetter(pending.id, pending.content);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState.mailbox?.pending?.id]);
 

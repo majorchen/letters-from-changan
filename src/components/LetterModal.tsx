@@ -1,19 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { LetterImage } from '@/lib/prompts';
-import LetterVideo from './LetterVideo';
-
 interface Props {
   content: string;
   isLoading?: boolean;
   onClose: () => void;
   onReply?: (reply: string) => void;
   canReply?: boolean;
-  image?: LetterImage;
 }
 
-export default function LetterModal({ content, isLoading, onClose, onReply, canReply, image }: Props) {
+export default function LetterModal({ content, isLoading, onClose, onReply, canReply }: Props) {
   const [reply, setReply] = useState('');
   const [showReply, setShowReply] = useState(false);
 
@@ -45,7 +41,6 @@ export default function LetterModal({ content, isLoading, onClose, onReply, canR
               <div className="font-handwriting text-xl leading-relaxed text-amber-900/90 whitespace-pre-wrap">
                 {content}
               </div>
-              <LetterVideo image={image} />
 
               {/* Actions */}
               <div className="mt-6 flex gap-3 justify-end">

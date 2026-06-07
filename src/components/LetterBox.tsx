@@ -1,7 +1,6 @@
 'use client';
 
 import { LetterEntry, PendingLetter } from '@/lib/prompts';
-import LetterImage from './LetterVideo';
 
 interface Props {
   letters: LetterEntry[];
@@ -88,7 +87,6 @@ export default function LetterBox({ letters, onClose, onOpenLetter, pending }: P
                       <div className="font-handwriting text-lg leading-relaxed text-amber-900/85 whitespace-pre-wrap">
                         {letter.content}
                       </div>
-                      {isFromLinShen && <LetterImage image={letter.image} video={letter.video} />}
                     </>
                   )}
 
