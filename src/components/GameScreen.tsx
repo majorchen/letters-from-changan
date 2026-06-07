@@ -739,14 +739,15 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       // 4. Options (from raw) — stored on the message for persistence
       const extractedOptions = sanitizeOptions(extractOptions(rawContent), msgs);
-      const contextualFallback = fallbackOptions(updated, rawContent, text);
-      const modelOptions = dedupeOptions(extractedOptions, msgs);
+      const contextualFallback = fallbackOptions(updated, rawContent, msgs, text);
+      const modelOptions = dedupeOptions(extractedOptions, msgs, 'model');
       const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
       const opts = updated.awaitingFreeInput
         ? []
         : dedupeOptions(
           ensureMailboxOption(withContradictionOption(optionsWithFallback, getContradictionOption(updated)), updated),
           msgs,
+          'final',
         );
       if (opts.includes(NEW_LETTER_OPTION)) {
         updated.mailbox = {
