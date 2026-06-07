@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import { LETTER_WRITER_PROMPT, IMAGE_STYLE_PREFIX, IMAGE_CONSTRAINT_SUFFIX } from '@/lib/prompts';
+import { LETTER_WRITER_PROMPT } from '@/lib/prompts';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 export const maxDuration = 60;
