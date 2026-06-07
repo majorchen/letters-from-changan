@@ -98,7 +98,9 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || '';
+            let content = chunk.choices[0]?.delta?.content || '';
+            // 简单过滤泄露的 LETTER_SCENE 标签
+            content = content.replace(/\[LETTER_SCENE:[^\]]*\]/gi, '');
             if (content) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
             }
