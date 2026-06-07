@@ -4,7 +4,7 @@ import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, saveChatHistory, loadChatHistory, saveGameState, updateChapter, NarrativeStateUpdate } from '@/lib/gameState';
-import { LetterEntry, LetterImage, PlayerState, ROLES, VisualProfile, IMAGE_STYLE_PREFIX, IMAGE_CONSTRAINT_SUFFIX } from '@/lib/prompts';
+import { LetterEntry, PlayerState, ROLES, VisualProfile, IMAGE_STYLE_PREFIX, IMAGE_CONSTRAINT_SUFFIX } from '@/lib/prompts';
 import { getCloudUserEmail } from '@/lib/cloudSaves';
 import LetterModal from './LetterModal';
 import LetterBox from './LetterBox';
@@ -556,9 +556,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   const [isStreaming, setIsStreaming] = useState(false);
   const [showLetter, setShowLetter] = useState(false);
   const [letterContent, setLetterContent] = useState('');
-  const [activeLetterImage, setActiveLetterImage] = useState<LetterImage | undefined>();
-  const [activeLetterWasUnread, setActiveLetterWasUnread] = useState(false);
   const [letterLoading, setLetterLoading] = useState(false);
+  const [activeLetterWasUnread, setActiveLetterWasUnread] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
   const [showLetterBox, setShowLetterBox] = useState(false);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
@@ -816,7 +815,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       return;
     }
     setLetterContent(letter.content);
-    setActiveLetterImage(letter.image || letter.video);
     const wasUnread = !letter.readAt;
     setActiveLetterWasUnread(wasUnread);
     const updated: PlayerState = {
@@ -967,7 +965,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
   function handleLetterClose() {
     setShowLetter(false);
-    setActiveLetterImage(undefined);
     if (activeLetterWasUnread) {
       setActiveLetterWasUnread(false);
       setTimeout(() => {
@@ -1457,7 +1454,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
 
       {/* Modals */}
       {showLetter && (
-        <LetterModal content={letterContent} isLoading={letterLoading} onClose={handleLetterClose} onReply={handleReply} canReply={true} image={activeLetterImage} />
+        <LetterModal content={letterContent} isLoading={letterLoading} onClose={handleLetterClose} onReply={handleReply} canReply={true} />
       )}
       {showLetterBox && (
         <LetterBox

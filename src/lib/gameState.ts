@@ -122,14 +122,6 @@ function normalizePlayerState(state: PlayerState): PlayerState {
         readAt: from === 'player'
           ? (letter.readAt || letter.timestamp || Date.now())
           : (letter.readAt || (!unreadIds.has(id) ? letter.timestamp || Date.now() : undefined)),
-        image: letter.image || (isFirstLinShenLetter ? {
-          key: 'preset:first-letter-2077',
-          status: 'ready' as const,
-          prompt: 'A glimpse of Lin Shen sending the first letter from 2077.',
-          url: '/linshen-first-letter.webp',
-          createdAt: letter.timestamp || Date.now(),
-          updatedAt: letter.timestamp || Date.now(),
-        } : undefined),
       };
     });
   const normalizedUnread = (Array.isArray(mailbox.unread) ? mailbox.unread : [])
