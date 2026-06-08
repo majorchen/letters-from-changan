@@ -5,6 +5,7 @@ import { normalizePlayerStateForApi } from '@/lib/normalize';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { stripScenePromptLeak } from '@/lib/game/responseSanitizers';
 import { parseAiTurn } from '@/lib/game/aiTurnParser';
+import { fallbackOptions } from '@/lib/game/optionLogic';
 
 type ClientMessage = {
   role: string;
@@ -30,6 +31,55 @@ const client = new OpenAI({
   apiKey: process.env.AGNES_API_KEY || '',
   baseURL: process.env.AGNES_API_URL || 'https://apihub.agnes-ai.com/v1',
 });
+
+function parseRepairOptions(content: string): string[] {
+  try {
+    const match = content.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(new Set(
+      parsed
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim().slice(0, 28))
+        .filter(Boolean),
+    )).slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+async function repairMissingOptions(
+  allMessages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+  fullContent: string,
+  normalizedState: NonNullable<ReturnType<typeof normalizePlayerStateForApi>>,
+  cleanClientMessages: { role: 'user' | 'assistant'; content: string }[],
+): Promise<string[]> {
+  try {
+    const response = await client.chat.completions.create({
+      model: 'agnes-2.0-flash',
+      messages: [
+        ...allMessages,
+        { role: 'assistant' as const, content: fullContent },
+        {
+          role: 'user' as const,
+          content: '上一轮回复缺少 [OPTIONS_JSON]。只根据上一轮正文生成 2-3 个中文行动选项，必须具体引用本轮人物、物件或冲突。只输出合法 JSON 字符串数组，不要解释，不要 Markdown。',
+        },
+      ],
+      temperature: 0.35,
+      max_tokens: 160,
+    });
+    const repaired = parseRepairOptions(response.choices[0]?.message?.content || '');
+    if (repaired.length > 0) return repaired;
+  } catch (error) {
+    console.warn('[chat-options-repair]', error);
+  }
+  return fallbackOptions(
+    normalizedState,
+    fullContent,
+    cleanClientMessages.map((message) => ({ ...message, timestamp: 0 })),
+  );
+}
 
 export async function POST(req: NextRequest) {
   const rateLimited = checkRateLimit(req);
@@ -116,6 +166,16 @@ export async function POST(req: NextRequest) {
           }
           if (!mailboxSent && (finalParsed.mailboxTriggered || /MAILBOX\s*[:：]\s*pending_first_open/i.test(fullContent))) {
             sendEvent({ type: 'mailbox' });
+          }
+          if (finalParsed.options.length === 0 && finalParsed.inputMode !== 'free') {
+            const repairedOptions = await repairMissingOptions(allMessages, fullContent, normalizedState, cleanClientMessages);
+            if (repairedOptions.length > 0) {
+              fullContent = `${fullContent.trim()}\n\n[OPTIONS_JSON]${JSON.stringify(repairedOptions)}[/OPTIONS_JSON]`;
+              const repairedOptionsKey = repairedOptions.join('\u0001');
+              if (repairedOptionsKey !== lastOptionsKey) {
+                sendEvent({ type: 'options', options: repairedOptions });
+              }
+            }
           }
           sendEvent({ type: 'done', content: fullContent });
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));

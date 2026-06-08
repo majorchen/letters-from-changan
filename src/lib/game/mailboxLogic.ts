@@ -1,7 +1,7 @@
 import type { LetterEntry, PlayerState } from '@/lib/prompts';
 
 export const NEW_LETTER_OPTION = '信匣里有一封新信';
-const ACTIVE_LETTER_INTERVAL_TURNS = 8;
+const ACTIVE_LETTER_INTERVAL_TURNS = 12;
 
 export function ensureMailboxOption(options: string[], state: PlayerState): string[] {
   const hasFreshNotice = state.mailbox?.unread?.some((notice) => !notice.noticeShown);

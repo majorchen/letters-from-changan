@@ -3,6 +3,7 @@ import { getCloudUserEmail } from '@/lib/cloudSaves';
 import type { ChatMessage } from '@/lib/gameState';
 import { saveChatHistory, saveGameState } from '@/lib/gameState';
 import { buildLetterContinuationPrompt } from '@/lib/game/letterHelpers';
+import { getPresetFirstLetter } from '@/lib/game/firstLetters';
 import { findUnreadLetter, getUnreadLetterCount, hasDiscoveredMailbox, NEW_LETTER_OPTION } from '@/lib/game/mailboxLogic';
 import type { LetterEntry, PlayerState } from '@/lib/prompts';
 
@@ -147,6 +148,11 @@ export function useLetterFlow({
     setIsPreparingLetter(true);
     try {
       const gs = gameStateRef.current;
+      const isFirstLetter = !playerReply && gs.letterHistory.every((letter) => letter.from !== 'linShen');
+      if (isFirstLetter) {
+        await finishIncomingLetter(`first-letter-${gs.role}`, getPresetFirstLetter(gs.role));
+        return;
+      }
       const res = await fetch('/api/letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -200,7 +206,6 @@ export function useLetterFlow({
     gameStateRef.current = updated;
     onStateChange(updated);
     saveGameState(updated);
-    void prepareIncomingLetter(reply);
 
     const replyMsg: ChatMessage = { role: 'system', content: '📮 你将回信投入了邮箱。信纸在金光中消失了。', timestamp: Date.now() };
     const newMessages = [...messagesRef.current, replyMsg];
