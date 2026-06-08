@@ -74,6 +74,8 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setSceneImage,
     ending,
     lastGoodImageRef,
+    earlyOptions,
+    queueStreamingOption,
     sendMessage,
   } = useGameChat({
     gameStateRef,
@@ -113,6 +115,11 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
   }
 
   function handleOptionClick(option: string) {
+    if (isStreaming) {
+      queueStreamingOption(option);
+      return;
+    }
+
     const currentState = gameStateRef.current;
     if (isMailboxOption(option, currentState) || option === NEW_LETTER_OPTION) {
       const unreadLetter = findUnreadLetter(currentState);
@@ -226,6 +233,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         messages={messages}
         isStreaming={isStreaming}
         showMailbox={showMailbox}
+        earlyOptions={earlyOptions}
         input={input}
         onInputChange={setInput}
         onSubmit={handleSubmit}

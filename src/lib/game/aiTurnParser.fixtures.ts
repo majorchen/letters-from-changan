@@ -68,6 +68,14 @@ NPCS: 驿卒, 守门兵`,
 ];
 
 export function runAiTurnParserFixtureAssertions() {
+  const partialOptions = parseAiTurn('正文\n\n[OPTIONS_JSON]["追问来意","暂且观察"][/OPTIONS_JSON]\n\n[STATE]\nLOCATION:', { partial: true });
+  if (partialOptions.options.join('|') !== '追问来意|暂且观察') {
+    throw new Error('partial options: options mismatch');
+  }
+  if (partialOptions.narrative.includes('OPTIONS_JSON') || partialOptions.narrative.includes('LOCATION:')) {
+    throw new Error('partial options: narrative leaked structured fields');
+  }
+
   for (const fixture of AI_TURN_PARSER_FIXTURES) {
     const parsed = parseAiTurn(fixture.raw);
     if (!parsed.narrative.includes(fixture.expected.narrativeIncludes)) {

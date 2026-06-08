@@ -30,10 +30,12 @@ export function useGameChat({
   setShowMailbox,
 }: UseGameChatOptions) {
   const [isStreaming, setIsStreaming] = useState(false);
+  const [earlyOptions, setEarlyOptions] = useState<string[]>([]);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [ending, setEnding] = useState<{ title: string; scenes: string[] } | null>(null);
   const lastGoodImageRef = useRef<string | null>(null);
   const endingRef = useRef<typeof ending>(null);
+  const queuedOptionRef = useRef<string | null>(null);
 
   useEffect(() => {
     endingRef.current = ending;
@@ -97,6 +99,7 @@ export function useGameChat({
     const newMessages = visibleUser ? [...msgs, userMsg] : msgs;
     setMessages(newMessages);
     setInput('');
+    setEarlyOptions([]);
     setIsStreaming(true);
 
     const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: Date.now() };
@@ -114,14 +117,22 @@ export function useGameChat({
       let sceneImageRequested = false;
       const fullContent = await streamChat(
         { messages: apiMessages, playerState: playerStateForApi },
-        (streamedContent) => {
-          const partialTurn = parseAiTurn(stripScenePromptLeak(streamedContent), { partial: true });
-          assistantMsg.content = sanitizeResponse(partialTurn.narrative, gs);
-          setMessages([...newMessages, { ...assistantMsg }]);
-          const streamedSceneDesc = !sceneImageRequested ? partialTurn.scenePrompt : null;
-          if (streamedSceneDesc) {
+        (event) => {
+          if (event.type === 'narrative') {
+            assistantMsg.content = sanitizeResponse(event.content, gs);
+            setMessages([...newMessages, { ...assistantMsg }]);
+            return;
+          }
+
+          if (event.type === 'options') {
+            const modelOptions = dedupeOptions(sanitizeOptions(event.options, msgs), msgs, 'model');
+            if (modelOptions.length > 0) setEarlyOptions(modelOptions);
+            return;
+          }
+
+          if (event.type === 'scene' && !sceneImageRequested) {
             sceneImageRequested = true;
-            void generateSceneImage(buildImagePrompt(streamedSceneDesc, gs, streamedContent));
+            void generateSceneImage(buildImagePrompt(event.scene, gs, assistantMsg.content));
           }
         },
       );
@@ -194,6 +205,8 @@ export function useGameChat({
         saveChatHistory(finalMsgs);
         setMessages(finalMsgs);
         prepareIncomingLetter(null);
+        queuedOptionRef.current = null;
+        setEarlyOptions([]);
         setIsStreaming(false);
         setShowMailbox(true);
         return;
@@ -228,10 +241,20 @@ export function useGameChat({
       if (shouldPrepareActiveLetter(updated)) {
         window.setTimeout(() => prepareIncomingLetter(null), 500);
       }
+      const queuedOption = queuedOptionRef.current;
+      queuedOptionRef.current = null;
+      setEarlyOptions([]);
       setIsStreaming(false);
+      if (queuedOption) {
+        window.setTimeout(() => {
+          void sendMessage(queuedOption);
+        }, 0);
+      }
     } catch (err) {
       assistantMsg.content = '（长安城的喧嚣声突然安静了一瞬...请再试一次）';
       setMessages([...newMessages, assistantMsg]);
+      queuedOptionRef.current = null;
+      setEarlyOptions([]);
       setIsStreaming(false);
       console.error(err);
     }
@@ -243,6 +266,11 @@ export function useGameChat({
     setSceneImage,
     ending,
     lastGoodImageRef,
+    earlyOptions,
+    queueStreamingOption: (option: string) => {
+      queuedOptionRef.current = option;
+      setEarlyOptions([]);
+    },
     sendMessage,
   };
 }

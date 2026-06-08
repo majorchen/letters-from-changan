@@ -9,6 +9,7 @@ interface OptionPanelProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   showMailbox: boolean;
+  earlyOptions: string[];
   input: string;
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
@@ -21,6 +22,7 @@ export default function OptionPanel({
   messages,
   isStreaming,
   showMailbox,
+  earlyOptions,
   input,
   onInputChange,
   onSubmit,
@@ -28,9 +30,13 @@ export default function OptionPanel({
   onOptionClick,
 }: OptionPanelProps) {
   const lastMsg = messages[messages.length - 1];
-  const currentOptions = (!isStreaming && lastMsg?.role === 'assistant' && lastMsg.options)
+  const finalOptions = (!isStreaming && lastMsg?.role === 'assistant' && lastMsg.options)
     ? lastMsg.options.map(normalizeOptionLabel)
     : [];
+  const streamingOptions = isStreaming
+    ? earlyOptions.map(normalizeOptionLabel)
+    : [];
+  const currentOptions = finalOptions.length > 0 ? finalOptions : streamingOptions;
 
   return (
     <>

@@ -40,7 +40,7 @@ function hasUnclosedStructure(raw: string): boolean {
 export function parseAiTurn(raw: string, options: ParseAiTurnOptions = {}): ParsedAiTurn {
   const warnings: string[] = [];
   const narrative = cleanNarrative(narrativeSource(raw));
-  const parsedOptions = options.partial ? [] : extractOptions(raw);
+  const parsedOptions = extractOptions(raw);
   const state = options.partial ? undefined : parseNarrativeState(raw);
   const scenePrompt = extractScenePrompt(raw);
   const mailboxTriggered = raw.includes('[MAILBOX]');

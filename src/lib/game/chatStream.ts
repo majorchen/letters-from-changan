@@ -1,8 +1,14 @@
 const CHAT_TIMEOUT_MS = 45_000;
 
+export type ChatStreamEvent =
+  | { type: 'narrative'; content: string }
+  | { type: 'options'; options: string[] }
+  | { type: 'scene'; scene: string }
+  | { type: 'done'; content: string };
+
 export async function streamChat(
   body: unknown,
-  onContent: (content: string) => void,
+  onEvent: (event: ChatStreamEvent) => void,
   attempt = 1,
 ): Promise<string> {
   const controller = new AbortController();
@@ -29,10 +35,28 @@ export async function streamChat(
       if (data === '[DONE]') return;
       const parsed = JSON.parse(data);
       if (parsed.error) throw new Error(String(parsed.error));
-      if (!parsed.content) return;
       if (!firstTokenAt) firstTokenAt = performance.now();
-      fullContent += parsed.content;
-      onContent(fullContent);
+      if (parsed.type === 'narrative' && typeof parsed.content === 'string') {
+        onEvent({ type: 'narrative', content: parsed.content });
+        return;
+      }
+      if (parsed.type === 'options' && Array.isArray(parsed.options)) {
+        onEvent({ type: 'options', options: parsed.options.filter((item: unknown): item is string => typeof item === 'string') });
+        return;
+      }
+      if (parsed.type === 'scene' && typeof parsed.scene === 'string') {
+        onEvent({ type: 'scene', scene: parsed.scene });
+        return;
+      }
+      if (parsed.type === 'done' && typeof parsed.content === 'string') {
+        fullContent = parsed.content;
+        onEvent({ type: 'done', content: parsed.content });
+        return;
+      }
+      if (typeof parsed.content === 'string') {
+        fullContent += parsed.content;
+        onEvent({ type: 'narrative', content: fullContent });
+      }
     };
 
     while (true) {
@@ -58,7 +82,7 @@ export async function streamChat(
       error: error instanceof Error ? error.message : String(error),
     });
     if (attempt < 2 && !fullContent.trim()) {
-      return streamChat(body, onContent, attempt + 1);
+      return streamChat(body, onEvent, attempt + 1);
     }
     throw error;
   } finally {

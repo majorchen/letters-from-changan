@@ -4,6 +4,7 @@ import { buildSystemPrompt } from '@/lib/prompts';
 import { normalizePlayerStateForApi } from '@/lib/normalize';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { stripScenePromptLeak } from '@/lib/game/responseSanitizers';
+import { parseAiTurn } from '@/lib/game/aiTurnParser';
 
 type ClientMessage = {
   role: string;
@@ -64,19 +65,54 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
+        const sendEvent = (payload: unknown) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+        };
+
         try {
+          let fullContent = '';
+          let lastNarrative = '';
+          let lastOptionsKey = '';
+          let sceneSent = false;
+
           for await (const chunk of stream) {
             let content = chunk.choices[0]?.delta?.content || '';
             // 简单过滤泄露的 LETTER_SCENE 标签
             content = content.replace(/\[LETTER_SCENE:[^\]]*\]/gi, '');
             if (content) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+              fullContent += content;
+              const parsed = parseAiTurn(fullContent, { partial: true });
+
+              if (parsed.narrative !== lastNarrative) {
+                lastNarrative = parsed.narrative;
+                sendEvent({ type: 'narrative', content: parsed.narrative });
+              }
+
+              const optionsKey = parsed.options.join('\u0001');
+              if (parsed.options.length > 0 && optionsKey !== lastOptionsKey) {
+                lastOptionsKey = optionsKey;
+                sendEvent({ type: 'options', options: parsed.options });
+              }
+
+              if (!sceneSent && parsed.scenePrompt) {
+                sceneSent = true;
+                sendEvent({ type: 'scene', scene: parsed.scenePrompt });
+              }
             }
           }
+          const finalParsed = parseAiTurn(fullContent);
+          const finalOptionsKey = finalParsed.options.join('\u0001');
+          if (finalParsed.options.length > 0 && finalOptionsKey !== lastOptionsKey) {
+            sendEvent({ type: 'options', options: finalParsed.options });
+          }
+          if (!sceneSent && finalParsed.scenePrompt) {
+            sendEvent({ type: 'scene', scene: finalParsed.scenePrompt });
+          }
+          sendEvent({ type: 'done', content: fullContent });
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (err) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err) })}\n\n`));
+          sendEvent({ error: String(err) });
           controller.close();
         }
       },
