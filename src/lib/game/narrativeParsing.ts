@@ -44,32 +44,48 @@ export function cleanStreamingNarrative(text: string): string {
 }
 
 // Extract option texts from raw AI content
-export function extractOptions(text: string): string[] {
-  // Support both strict and loose spacing in tags
-  const structured = text.match(/\[\s*OPTIONS_JSON\s*\]([\s\S]*?)\[\s*\/OPTIONS_JSON\s*\]/i);
-  if (structured) {
-    try {
-      const content = structured[1].trim();
-      let parsed: string[] = [];
-      // Robust JSON parsing: handle array or raw lines
-      if (content.startsWith('[') && content.endsWith(']')) {
-        parsed = JSON.parse(content);
-      } else {
-        // Fallback for AI occasionally outputting raw strings instead of JSON array
-        parsed = content.split(/[,\n]/).map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
-      }
-
-      if (Array.isArray(parsed)) {
-        return Array.from(new Set(
-          parsed
-            .filter((item): item is string => typeof item === 'string')
-            .map((item) => item.trim().slice(0, 60))
-            .filter(Boolean),
-        )).slice(0, 4);
-      }
-    } catch {
-      // Fall through to legacy option formats.
+function parseOptionsJsonContent(content: string): string[] {
+  try {
+    const trimmed = content.trim();
+    let parsed: string[] = [];
+    // Robust JSON parsing: handle array or raw lines
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      parsed = JSON.parse(trimmed);
+    } else {
+      // Fallback for AI occasionally outputting raw strings instead of JSON array
+      parsed = trimmed.split(/[,\n]/).map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
     }
+
+    if (Array.isArray(parsed)) {
+      return Array.from(new Set(
+        parsed
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim().slice(0, 60))
+          .filter(Boolean),
+      )).slice(0, 4);
+    }
+  } catch {
+    // Fall through to other formats.
+  }
+  return [];
+}
+
+function extractTaggedOptionsContent(text: string): string | null {
+  const closed = text.match(/\[\s*OPTIONS_JSON\s*\]([\s\S]*?)\[\s*\/OPTIONS_JSON\s*\]/i);
+  if (closed) return closed[1];
+
+  const open = text.match(/\[\s*OPTIONS_JSON\s*\]([\s\S]*)/i);
+  if (!open) return null;
+  const untilNextStructuredBlock = open[1].split(/\n\s*(?:\[\s*SCENE\b|\[\s*STATE\s*\]|\[\s*MAILBOX\s*\]|LOCATION\s*:|NPCS\s*:|EVENTS\s*:|SUMMARY\s*:)/i)[0];
+  return untilNextStructuredBlock.trim() || null;
+}
+
+export function extractOptions(text: string): string[] {
+  // Support both strict and unclosed OPTIONS_JSON tags.
+  const taggedContent = extractTaggedOptionsContent(text);
+  if (taggedContent) {
+    const taggedOptions = parseOptionsJsonContent(taggedContent);
+    if (taggedOptions.length > 0) return taggedOptions;
   }
 
   const rawJsonArray = text.match(/(?:^|\n)\s*(\[\s*"[^"\n]{1,80}"(?:\s*,\s*"[^"\n]{1,80}"){0,3}\s*\])\s*(?:\n|$)/);

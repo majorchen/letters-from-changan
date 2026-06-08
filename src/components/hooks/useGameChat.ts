@@ -90,6 +90,19 @@ export function useGameChat({
     } catch { /* silently fail - keep current image */ }
   }
 
+  function logOptionFallbackDiagnostics(rawContent: string, parsedOptions: string[], extractedOptions: string[], warnings: string[]) {
+    console.warn('[chat-options-fallback]', {
+      hasOptionsOpenTag: /\[\s*OPTIONS_JSON\s*\]/i.test(rawContent),
+      hasOptionsCloseTag: /\[\s*\/\s*OPTIONS_JSON\s*\]/i.test(rawContent),
+      hasRawJsonArray: /(?:^|\n)\s*\[\s*"[^"\n]{1,80}"/m.test(rawContent),
+      hasStateBlock: /\[\s*STATE\s*\]/i.test(rawContent),
+      parsedOptions,
+      extractedOptions,
+      warnings,
+      rawExcerpt: rawContent.slice(0, 800),
+    });
+  }
+
   async function sendMessage(text: string, options: { visibleUser?: boolean } = {}) {
     const gs = gameStateRef.current;
     const msgs = messagesRef.current;
@@ -215,6 +228,9 @@ export function useGameChat({
       const extractedOptions = sanitizeOptions(parsedTurn.options, msgs);
       const contextualFallback = fallbackOptions(updated, rawContent, msgs, text);
       const modelOptions = dedupeOptions(extractedOptions, msgs, 'model');
+      if (modelOptions.length === 0 && !updated.awaitingFreeInput) {
+        logOptionFallbackDiagnostics(rawContent, parsedTurn.options, extractedOptions, parsedTurn.warnings);
+      }
       const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
       const opts = updated.awaitingFreeInput
         ? []

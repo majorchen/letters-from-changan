@@ -76,6 +76,14 @@ export function runAiTurnParserFixtureAssertions() {
     throw new Error('partial options: narrative leaked structured fields');
   }
 
+  const unclosedTaggedOptions = parseAiTurn('正文\n\n[OPTIONS_JSON]["追问掌柜","检查陶罐"]\n\n[SCENE:inn room]\n[STATE]\nLOCATION: 客栈\n[/STATE]');
+  if (unclosedTaggedOptions.options.join('|') !== '追问掌柜|检查陶罐') {
+    throw new Error('unclosed tagged options: options mismatch');
+  }
+  if (unclosedTaggedOptions.narrative.includes('OPTIONS_JSON') || unclosedTaggedOptions.narrative.includes('SCENE')) {
+    throw new Error('unclosed tagged options: narrative leaked structured fields');
+  }
+
   for (const fixture of AI_TURN_PARSER_FIXTURES) {
     const parsed = parseAiTurn(fixture.raw);
     if (!parsed.narrative.includes(fixture.expected.narrativeIncludes)) {
