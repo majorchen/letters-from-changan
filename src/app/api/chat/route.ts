@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
           let lastNarrative = '';
           let lastOptionsKey = '';
           let sceneSent = false;
+          let mailboxSent = false;
 
           for await (const chunk of stream) {
             let content = chunk.choices[0]?.delta?.content || '';
@@ -98,6 +99,11 @@ export async function POST(req: NextRequest) {
                 sceneSent = true;
                 sendEvent({ type: 'scene', scene: parsed.scenePrompt });
               }
+
+              if (!mailboxSent && (parsed.mailboxTriggered || /MAILBOX\s*[:：]\s*pending_first_open/i.test(fullContent))) {
+                mailboxSent = true;
+                sendEvent({ type: 'mailbox' });
+              }
             }
           }
           const finalParsed = parseAiTurn(fullContent);
@@ -107,6 +113,9 @@ export async function POST(req: NextRequest) {
           }
           if (!sceneSent && finalParsed.scenePrompt) {
             sendEvent({ type: 'scene', scene: finalParsed.scenePrompt });
+          }
+          if (!mailboxSent && (finalParsed.mailboxTriggered || /MAILBOX\s*[:：]\s*pending_first_open/i.test(fullContent))) {
+            sendEvent({ type: 'mailbox' });
           }
           sendEvent({ type: 'done', content: fullContent });
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));

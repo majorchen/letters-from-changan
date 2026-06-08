@@ -4,6 +4,7 @@ export type ChatStreamEvent =
   | { type: 'narrative'; content: string }
   | { type: 'options'; options: string[] }
   | { type: 'scene'; scene: string }
+  | { type: 'mailbox' }
   | { type: 'done'; content: string };
 
 export async function streamChat(
@@ -46,6 +47,10 @@ export async function streamChat(
       }
       if (parsed.type === 'scene' && typeof parsed.scene === 'string') {
         onEvent({ type: 'scene', scene: parsed.scene });
+        return;
+      }
+      if (parsed.type === 'mailbox') {
+        onEvent({ type: 'mailbox' });
         return;
       }
       if (parsed.type === 'done' && typeof parsed.content === 'string') {

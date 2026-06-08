@@ -36,12 +36,64 @@ const FALLBACK_POOL = [
   '寻个由头再问问...',
 ];
 
+function uniquePush(items: string[], item: string) {
+  const normalized = item.trim();
+  if (!normalized || items.includes(normalized)) return;
+  items.push(normalized);
+}
+
+function contextualFallbackOptions(state: PlayerState, content: string, playerInput = ''): string[] {
+  const context = `${playerInput}\n${content}`;
+  const options: string[] = [];
+  const knownNpc = (state.knownNPCs || []).find((npc) => npc && context.includes(npc));
+  const npcMatch = context.match(/(?:王掌柜|阿依|李无名|守门兵|驿卒|掌柜|书生|胡商|老门卒|乐师|军士)/);
+  const npc = knownNpc || npcMatch?.[0];
+
+  if (npc) {
+    uniquePush(options, `追问${npc}刚才那句话的意思`);
+    uniquePush(options, `观察${npc}的神色变化`);
+  }
+  if (/(陶罐|陶器|信匣|邮箱|金光|发光)/.test(context)) {
+    uniquePush(options, '靠近那只发光的唐三彩陶器');
+    uniquePush(options, '暂时不碰陶器，先记下异状');
+  }
+  if (/(军报|驿卒|范阳|边地|兵|守门)/.test(context)) {
+    uniquePush(options, '压低声音打听军报来处');
+    uniquePush(options, '避开人群跟上那名驿卒');
+  }
+  if (/(账本|价格|货|西市|铺子|掌柜|买卖)/.test(context)) {
+    uniquePush(options, '拿出账本核对市价异动');
+    uniquePush(options, '去西市找熟人打听行情');
+  }
+  if (/(琴|琵琶|乐声|曲子|酒肆|歌)/.test(context)) {
+    uniquePush(options, '走近酒肆听清那段旋律');
+    uniquePush(options, '询问乐声为何忽然停下');
+  }
+  if (/(书|诗|文书|坊图|奏疏|抄本)/.test(context)) {
+    uniquePush(options, '借来看清那份文书');
+    uniquePush(options, '追问文字里不合常理之处');
+  }
+  if (/(刀|暗榜|缉捕|跟踪|黑衣|巷)/.test(context)) {
+    uniquePush(options, '按住刀柄留意身后动静');
+    uniquePush(options, '绕进巷口试探是否有人跟随');
+  }
+
+  if (state.location) uniquePush(options, `在${state.location}再查一处细节`);
+  uniquePush(options, '换个由头继续追问');
+  return options.slice(0, 3);
+}
+
 export function fallbackOptions(state: PlayerState, content: string, messages: ChatMessage[], playerInput = ''): string[] {
   const contradictionOption = getContradictionOption(state);
   const context = `${playerInput}\n${content}`;
   
   if (state.chapter === 'arrival' && /(客栈|客房|房间|投宿|安顿|住下|王掌柜)/.test(context)) {
     return ['请王掌柜安排一间客房', '先把行李放进房里'];
+  }
+
+  const contextualOptions = contextualFallbackOptions(state, content, playerInput);
+  if (contextualOptions.length > 0) {
+    return withContradictionOption(contextualOptions, contradictionOption);
   }
 
   // Pick a fallback that hasn't been used recently, with randomness

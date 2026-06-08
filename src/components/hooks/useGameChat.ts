@@ -10,6 +10,9 @@ import { streamChat } from '@/lib/game/chatStream';
 import type { PlayerState } from '@/lib/prompts';
 import { parseAiTurn } from '@/lib/game/aiTurnParser';
 
+const ENDING_GATE_TURN = 220;
+const ENDING_OPTION = '面对这条线最后的问题';
+
 interface UseGameChatOptions {
   gameStateRef: MutableRefObject<PlayerState>;
   messagesRef: MutableRefObject<ChatMessage[]>;
@@ -128,6 +131,7 @@ export function useGameChat({
 
     try {
       let sceneImageRequested = false;
+      let suppressEarlyOptions = false;
       const fullContent = await streamChat(
         { messages: apiMessages, playerState: playerStateForApi },
         (event) => {
@@ -138,8 +142,20 @@ export function useGameChat({
           }
 
           if (event.type === 'options') {
+            if (suppressEarlyOptions) return;
+            if (!hasDiscoveredMailbox(gs) && /(陶罐|陶器|信匣|邮箱|金光|发光)/.test(assistantMsg.content)) {
+              suppressEarlyOptions = true;
+              setEarlyOptions([]);
+              return;
+            }
             const modelOptions = dedupeOptions(sanitizeOptions(event.options, msgs), msgs, 'model');
             if (modelOptions.length > 0) setEarlyOptions(modelOptions);
+            return;
+          }
+
+          if (event.type === 'mailbox') {
+            suppressEarlyOptions = true;
+            setEarlyOptions([]);
             return;
           }
 
@@ -232,10 +248,19 @@ export function useGameChat({
         logOptionFallbackDiagnostics(rawContent, parsedTurn.options, extractedOptions, parsedTurn.warnings);
       }
       const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
+      const shouldOfferEnding = updated.storyPhase === 'act3'
+        && updated.turnCount >= ENDING_GATE_TURN
+        && !endingRef.current
+        && narrativeState?.visualCue !== 'ending';
       const opts = updated.awaitingFreeInput
         ? []
         : dedupeOptions(
-          ensureMailboxOption(withContradictionOption(optionsWithFallback, getContradictionOption(updated)), updated),
+          ensureMailboxOption(
+            shouldOfferEnding
+              ? [ENDING_OPTION, ...withContradictionOption(optionsWithFallback, getContradictionOption(updated))]
+              : withContradictionOption(optionsWithFallback, getContradictionOption(updated)),
+            updated,
+          ),
           msgs,
           'final',
         );
@@ -254,6 +279,9 @@ export function useGameChat({
       const finalMessages = [...newMessages, { ...assistantMsg, content: cleanContent, options: opts }];
       saveChatHistory(finalMessages);
       setMessages(finalMessages);
+      if (text === ENDING_OPTION && !endingRef.current) {
+        void prepareEnding();
+      }
       if (shouldPrepareActiveLetter(updated)) {
         window.setTimeout(() => prepareIncomingLetter(null), 500);
       }
