@@ -11,6 +11,8 @@ export function cleanNarrative(text: string): string {
     .replace(/【\s*SCENE\s*】[\s\S]*?【\s*\/\s*SCENE\s*】/gi, '')
     .replace(/[【\[]\s*\/?\s*scene\s*\/?\s*[】\]]/gi, '')
     .replace(/\[STATE\][\s\S]*?\[\/STATE\]/gi, '')
+    .replace(/\[\s*\/?\s*(STATE|SCENE|OPTIONS_JSON|MAILBOX)\s*\/?\s*\]/gi, '')
+    .replace(/【\s*\/?\s*(STATE|SCENE|OPTIONS_JSON|MAILBOX)\s*\/?\s*】/gi, '')
     .replace(/\[MAILBOX\]/gi, '')
     // Truncate from the FIRST option marker to the end (handles mid-stream)
     .replace(/(?:【\s*选项\s*[a-cA-C]?\s*】|(?:^|\n)\s*选项\s*[a-cA-C]\s*[：:]|(?:^|\n)\s*[a-cA-C]\s*[\.、:：)]|(?:^|\n)\s*[1-3]\s*[\.、:：)）])[\s\S]*$/i, '')
@@ -23,6 +25,11 @@ export function cleanNarrative(text: string): string {
     .replace(/\[\s*$/, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+export function recoverNarrativeText(text: string): string {
+  const beforeOptions = text.split(/\[OPTIONS_JSON\]|【\s*选项|(?:^|\n)\s*(?:选项\s*)?[A-C1-3][\.、:：)）]/i)[0] || text;
+  return cleanNarrative(beforeOptions);
 }
 
 // Extract option texts from raw AI content

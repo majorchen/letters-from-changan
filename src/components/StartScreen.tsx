@@ -214,7 +214,7 @@ export default function StartScreen({ onStart, saves, onContinue, onSavesChanged
   }
 
   return (
-    <div className="h-full flex flex-col items-end justify-end px-6 pb-8 relative overflow-hidden">
+    <div className="h-full flex flex-col items-end justify-end px-6 pb-8 relative overflow-hidden bg-stone-950">
       {/* Background image with slow zoom animation */}
       <div className="absolute inset-0 animate-slow-zoom">
         <Image

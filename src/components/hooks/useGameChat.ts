@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type
 import type { ChatMessage } from '@/lib/gameState';
 import { saveChatHistory, saveGameState, updateChapter } from '@/lib/gameState';
 import { ensureMailboxOption, hasDiscoveredMailbox, NEW_LETTER_OPTION, shouldForceFirstMailbox, shouldPrepareActiveLetter } from '@/lib/game/mailboxLogic';
-import { cleanNarrative, extractOptions, parseNarrativeState } from '@/lib/game/narrativeParsing';
+import { cleanNarrative, extractOptions, parseNarrativeState, recoverNarrativeText } from '@/lib/game/narrativeParsing';
 import { dedupeOptions, fallbackOptions, getContradictionOption, withContradictionOption } from '@/lib/game/optionLogic';
 import { sanitizeOptions, sanitizeResponse, sanitizeState, stripScenePromptLeak } from '@/lib/game/responseSanitizers';
 import { extractScenePrompt, fallbackSceneFromNarrative, LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
@@ -128,7 +128,13 @@ export function useGameChat({
       );
 
       const rawContent = fullContent;
-      const cleanContent = sanitizeResponse(cleanNarrative(rawContent), gs);
+      let cleanContent = sanitizeResponse(cleanNarrative(rawContent), gs);
+      if (!cleanContent) {
+        cleanContent = sanitizeResponse(recoverNarrativeText(rawContent), gs);
+      }
+      if (!cleanContent) {
+        cleanContent = '你一时没有说话，周围的喧声重新涌了上来。';
+      }
       const narrativeState = parseNarrativeState(rawContent);
       if (narrativeState) sanitizeState(narrativeState, gs);
       if (narrativeState?.visualCue === 'ending' && !endingRef.current) {

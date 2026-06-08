@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import StartScreen from '@/components/StartScreen';
 import GameScreen from '@/components/GameScreen';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import IntroSplash from '@/components/IntroSplash';
 import { PlayerState } from '@/lib/prompts';
 import { activateSave, createNewGame, listSaveSummaries, SaveSummary } from '@/lib/gameState';
 
@@ -14,7 +15,6 @@ export default function Home() {
 
   useEffect(() => {
     setSaves(listSaveSummaries());
-    setScreen('start');
   }, []);
 
   function handleStart(role: string) {
@@ -38,11 +38,7 @@ export default function Home() {
   }
 
   if (screen === 'loading') {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-amber-600/50 font-handwriting text-xl">长安...</div>
-      </div>
-    );
+    return <IntroSplash onComplete={() => setScreen('start')} />;
   }
 
   if (screen === 'start') {

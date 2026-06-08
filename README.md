@@ -2,7 +2,7 @@
 
 AI 驱动的盛唐长安跨时空书信叙事游戏。
 
-玩家以商人、乐师、游侠或书生的身份进入公元 742 年的长安，在市井、客栈、酒肆与陌生人之间游走。某个夜晚，一只像唐三彩陶器的信匣开始发光，来自 2077 年的林深把第一封信投向了这个时代。
+玩家以商人、乐师、游侠或书生的身份进入公元 742 年的长安，在市井、客栈、酒肆与陌生人之间行走。某个夜晚，一只像唐三彩陶器的信匣开始发光，来自 2077 年的林深把第一封信投向了这个时代。
 
 线上版本：https://letterstang.aifisher.cn
 
@@ -10,8 +10,8 @@ AI 驱动的盛唐长安跨时空书信叙事游戏。
 
 - 选择身份进入不同开场。
 - 与 AI 叙事者对话，探索长安地点、NPC、事件和矛盾线索。
-- 每轮对话生成行动选项，并按场景生成画面。
-- 通过信匣与 2077 年的林深通信；信件是文本系统，不再依赖视频。
+- 每轮对话生成行动选项，并按场景生成头图。
+- 通过信匣与 2077 年的林深通信；信件是文本系统，不依赖视频。
 - 支持多旅程本地存档；配置 Supabase 后可登录并跨设备同步。
 
 ## 技术栈
@@ -53,13 +53,14 @@ npm run lint
 npm run build
 ```
 
-当前仓库没有 `scripts/` 目录，因此 README 和 `package.json` 不再保留旧的 `smoke:*` / `audit` 脚本。
+当前仓库没有 `scripts/` 目录，因此 README 和 `package.json` 不保留旧的 `smoke:*` / `audit` 脚本。
 
 ## 当前架构
 
 ### 页面与组件
 
-- `src/app/page.tsx`：首页/游戏页切换、存档列表入口。
+- `src/app/page.tsx`：冷启动、首页/游戏页切换、存档列表入口。
+- `src/components/IntroSplash.tsx`：冷启动引子、首页和角色预置图预加载。
 - `src/components/StartScreen.tsx`：开始页、角色选择、存档选择、云登录入口。
 - `src/components/GameScreen.tsx`：游戏主协调组件，只负责组合状态、hooks 和 UI。
 - `src/components/ChatDisplay.tsx`：叙事消息列表、场景图展示、滚动锚点。
@@ -76,8 +77,7 @@ npm run build
 - `src/components/hooks/useOpeningFlow.ts`：历史恢复、开场 phase、打字机流程。
 - `src/components/hooks/useGameChat.ts`：聊天发送、流式响应、状态更新、场景图、结局触发。
 - `src/components/hooks/useLetterFlow.ts`：来信、读信、回信、信匣状态。
-- `src/components/hooks/useShareCard.ts`：分享图 canvas 和二维码。
-- `src/components/hooks/useStorageHealth.ts`：localStorage 容量提示、跨标签页存档变更提示。
+- `src/components/hooks/useShareCard.ts`：分享图 canvas、二维码和预加载素材。
 
 ### 游戏逻辑
 
@@ -125,13 +125,16 @@ npm run build
 ## 线上问题排查入口
 
 - AI 回复没有选项：看 `src/lib/game/narrativeParsing.ts`、`src/lib/game/optionLogic.ts`、`src/lib/prompts/buildPrompt.ts`。
+- 正文出现 `[STATE]`、`[/STATE]`、`[SCENE]` 等结构标签：看 `src/lib/game/narrativeParsing.ts` 和 `src/lib/game/responseSanitizers.ts`。
 - 点到普通“信”字选项却打开信匣：看 `src/lib/game/mailboxLogic.ts` 和 `GameScreen.handleOptionClick`。
 - 来信不出现或重复出现：看 `src/components/hooks/useLetterFlow.ts`、`src/app/api/letter/route.ts`、`src/lib/game/mailboxLogic.ts`。
-- 场景图不生成或风格不对：看 `src/components/hooks/useGameChat.ts`、`src/app/api/image/route.ts`、`src/lib/prompts/imagePrompt.ts`。
+- 场景图不生成、生成太慢或风格不对：看 `src/components/hooks/useGameChat.ts`、`src/app/api/image/route.ts`、`src/lib/prompts/imagePrompt.ts`。
+- 首页首屏或预置角色图加载慢：看 `src/components/IntroSplash.tsx`、`src/components/StartScreen.tsx`、`public/*.webp`。
+- 分享按钮无反应或分享文字不完整：看 `src/components/hooks/useShareCard.ts`、`src/lib/game/shareHelpers.ts`。
 - 状态丢失、存档变大、导入失败：看 `src/lib/gameState/saveStorage.ts`、`src/lib/normalize.ts`。
 - 云存档登录/同步问题：看 `src/lib/cloudSaves.ts` 和 Supabase 配置。
 - prompt 内容要调整：优先改 `src/lib/prompts/*` 和 `src/lib/gameData/*`，不要改 `prompts.ts` barrel。
-- 主界面 UI 问题：看 `GameScreen.tsx` 的组合关系，再进入对应组件或 hook。
+- 主界面 UI 问题：先看 `GameScreen.tsx` 的组合关系，再进入对应组件或 hook。
 
 ## 文档
 
@@ -145,4 +148,4 @@ npm run build
 - 长线游玩 30-60 分钟，确认信件节奏、状态推进和结局触发自然。
 - 多设备云同步冲突场景，确认“最新版本优先”的策略符合预期。
 - 移动端可访问性和软键盘体验。
-- API rate limit 默认是防滥用，不是强使用限制；如正常玩家遇到 429，可调高 `API_RATE_LIMIT_PER_MINUTE`。
+- API rate limit 默认是防滥用，不是强制使用限制；如正常玩家遇到 429，可调高 `API_RATE_LIMIT_PER_MINUTE`。

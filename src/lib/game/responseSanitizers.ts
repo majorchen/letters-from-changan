@@ -30,6 +30,8 @@ export function stripScenePromptLeak(raw: string): string {
 
 export function sanitizeResponse(raw: string, state: PlayerState): string {
   let content = stripScenePromptLeak(raw);
+  content = content.replace(/\[\s*\/?\s*(STATE|SCENE|OPTIONS_JSON|MAILBOX)\s*\/?\s*\]/gi, '');
+  content = content.replace(/【\s*\/?\s*(STATE|SCENE|OPTIONS_JSON|MAILBOX)\s*\/?\s*】/gi, '');
   content = content.replace(/信上写着[：:][\s\S]*/g, '');
   content = content.replace(/信中说[：:][\s\S]*/g, '');
   content = content.replace(/林深写道[：:][\s\S]*/g, '');
