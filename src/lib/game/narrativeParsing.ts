@@ -4,6 +4,7 @@ import type { VisualProfile } from '@/lib/prompts';
 export function cleanNarrative(text: string): string {
   return text
     .replace(/\[OPTIONS_JSON\][\s\S]*?\[\/OPTIONS_JSON\]/gi, '')
+    .replace(/(?:^|\n)\s*\[\s*"[^"\n]{1,80}"(?:\s*,\s*"[^"\n]{1,80}"){0,3}\s*\]\s*(?=\n|$)/g, '')
     // Remove closed [SCENE:...] / [MAILBOX] tags anywhere
     .replace(/\[SCENE:[^\]]*\]/gi, '')
     .replace(/【\s*SCENE\s*[：:][\s\S]*?】/gi, '')
@@ -28,7 +29,7 @@ export function cleanNarrative(text: string): string {
 }
 
 export function recoverNarrativeText(text: string): string {
-  const beforeOptions = text.split(/\[OPTIONS_JSON\]|【\s*选项|(?:^|\n)\s*(?:选项\s*)?[A-C1-3][\.、:：)）]/i)[0] || text;
+  const beforeOptions = text.split(/\[OPTIONS_JSON\]|(?:^|\n)\s*\[\s*"[^"\n]{1,80}"(?:\s*,\s*"[^"\n]{1,80}"){0,3}\s*\]|【\s*选项|(?:^|\n)\s*(?:选项\s*)?[A-C1-3][\.、:：)）]/i)[0] || text;
   return cleanNarrative(beforeOptions);
 }
 
@@ -58,6 +59,23 @@ export function extractOptions(text: string): string[] {
         parsed = content.split(/[,\n]/).map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
       }
 
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(
+          parsed
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim().slice(0, 60))
+            .filter(Boolean),
+        )).slice(0, 4);
+      }
+    } catch {
+      // Fall through to legacy option formats.
+    }
+  }
+
+  const rawJsonArray = text.match(/(?:^|\n)\s*(\[\s*"[^"\n]{1,80}"(?:\s*,\s*"[^"\n]{1,80}"){0,3}\s*\])\s*(?:\n|$)/);
+  if (rawJsonArray) {
+    try {
+      const parsed = JSON.parse(rawJsonArray[1]);
       if (Array.isArray(parsed)) {
         return Array.from(new Set(
           parsed

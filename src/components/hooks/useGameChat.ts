@@ -115,7 +115,7 @@ export function useGameChat({
       const fullContent = await streamChat(
         { messages: apiMessages, playerState: playerStateForApi },
         (streamedContent) => {
-          assistantMsg.content = cleanStreamingNarrative(stripScenePromptLeak(streamedContent));
+          assistantMsg.content = sanitizeResponse(cleanStreamingNarrative(stripScenePromptLeak(streamedContent)), gs);
           setMessages([...newMessages, { ...assistantMsg }]);
           const streamedSceneDesc = !sceneImageRequested ? extractScenePrompt(streamedContent) : null;
           if (streamedSceneDesc) {

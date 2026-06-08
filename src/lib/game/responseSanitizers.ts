@@ -12,6 +12,13 @@ function isLikelyScenePromptLeak(line: string): boolean {
   return asciiLetters >= 24 && asciiLetters > cjkChars * 2 && SCENE_PROMPT_LINE_PATTERN.test(trimmed);
 }
 
+function localizeInlineEnglishTerms(content: string): string {
+  return content
+    .replace(/\bTang-Persian\b/g, '唐式波斯')
+    .replace(/\bPersian\b/g, '波斯')
+    .replace(/\bteal\b/g, '青绿色');
+}
+
 export function stripScenePromptLeak(raw: string): string {
   let content = raw;
   content = content.replace(/\[SCENE:[\s\S]*?(?:\]|$)/gi, '');
@@ -46,7 +53,7 @@ export function sanitizeResponse(raw: string, state: PlayerState): string {
     }
   }
   void state;
-  return content;
+  return localizeInlineEnglishTerms(content);
 }
 
 export function sanitizeOptions(options: string[], messages: ChatMessage[]): string[] {

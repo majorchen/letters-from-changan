@@ -11,7 +11,7 @@ const PRELOAD_ASSETS = [
   '/icon-192.png',
 ];
 
-const LOADING_DOTS = ['', '.', '..', '...'];
+const LOADING_DOTS = ['.', '..', '...'];
 
 interface Props {
   onComplete: () => void;
@@ -87,7 +87,7 @@ export default function IntroSplash({ onComplete }: Props) {
           </div>
         </div>
 
-        <div className="mt-9 flex animate-fade-in-up items-center justify-center gap-2 text-sm tracking-[0.22em] text-amber-300/80" style={{ animationDelay: '1.15s', animationFillMode: 'both' }}>
+        <div className="mt-9 flex items-center justify-center gap-2 text-sm tracking-[0.22em] text-amber-300/80">
           <span className="text-amber-400/55">🐎</span>
           <span>
             正在抵达长安

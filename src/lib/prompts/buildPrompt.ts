@@ -63,6 +63,11 @@ export function buildSystemPrompt(role: string, playerState: PlayerState): strin
 
   return `${WORLD_SETTING}
 
+## 正文语言硬性规则
+叙事正文和行动选项必须全部使用中文。不要把 VISUAL_PROFILE 或 SCENE 里的英文外貌词、颜色词、族裔词直接写进正文。
+例如正文必须写“波斯少女”“青绿色头巾”，不要写 “Persian 少女”“teal 色头巾”。
+英文只允许出现在 [SCENE] 和 [STATE] 的 VISUAL_PROFILE 字段中。
+
 ## 当前玩家信息
 - 身份：${roleInfo.name}（${roleInfo.desc}）
 - 当前位置：${playerState.location}
