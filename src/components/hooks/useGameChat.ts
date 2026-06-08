@@ -5,10 +5,9 @@ import { ensureMailboxOption, hasDiscoveredMailbox, NEW_LETTER_OPTION, shouldFor
 import { recoverNarrativeText } from '@/lib/game/narrativeParsing';
 import { dedupeOptions, fallbackOptions, getContradictionOption, withContradictionOption } from '@/lib/game/optionLogic';
 import { sanitizeOptions, sanitizeResponse, sanitizeState, stripScenePromptLeak } from '@/lib/game/responseSanitizers';
-import { fallbackSceneFromNarrative, LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
+import { buildImagePrompt, fallbackSceneFromNarrative, LOCATION_KEYWORDS } from '@/lib/game/sceneHelpers';
 import { streamChat } from '@/lib/game/chatStream';
 import type { PlayerState } from '@/lib/prompts';
-import { IMAGE_CONSTRAINT_SUFFIX, IMAGE_STYLE_PREFIX } from '@/lib/prompts';
 import { parseAiTurn } from '@/lib/game/aiTurnParser';
 
 interface UseGameChatOptions {
@@ -122,9 +121,7 @@ export function useGameChat({
           const streamedSceneDesc = !sceneImageRequested ? partialTurn.scenePrompt : null;
           if (streamedSceneDesc) {
             sceneImageRequested = true;
-            void generateSceneImage(
-              IMAGE_STYLE_PREFIX + ' ' + streamedSceneDesc + visualProfilesForScene(gs, streamedContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-            );
+            void generateSceneImage(buildImagePrompt(streamedSceneDesc, gs, streamedContent));
           }
         },
       );
@@ -150,9 +147,7 @@ export function useGameChat({
       if (sceneDesc) {
         if (!sceneImageRequested) {
           sceneImageRequested = true;
-          void generateSceneImage(
-            IMAGE_STYLE_PREFIX + ' ' + sceneDesc + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-          );
+          void generateSceneImage(buildImagePrompt(sceneDesc, updated, rawContent));
         }
       } else {
         let generatedFromKeyword = false;
@@ -161,18 +156,14 @@ export function useGameChat({
             generatedFromKeyword = true;
             if (!sceneImageRequested) {
               sceneImageRequested = true;
-              void generateSceneImage(
-                IMAGE_STYLE_PREFIX + ' ' + loc.scene + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-              );
+              void generateSceneImage(buildImagePrompt(loc.scene, updated, rawContent));
             }
             break;
           }
         }
         if (!generatedFromKeyword && !sceneImageRequested) {
           sceneImageRequested = true;
-          void generateSceneImage(
-            IMAGE_STYLE_PREFIX + ' ' + fallbackSceneFromNarrative(updated.location, cleanContent) + visualProfilesForScene(updated, rawContent) + ' ' + IMAGE_CONSTRAINT_SUFFIX,
-          );
+          void generateSceneImage(buildImagePrompt(fallbackSceneFromNarrative(updated.location, cleanContent), updated, rawContent));
         }
       }
 
