@@ -33,6 +33,7 @@ export function useLetterFlow({
   const [activeLetterWasUnread, setActiveLetterWasUnread] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
   const [showLetterBox, setShowLetterBox] = useState(false);
+  const [isPreparingLetter, setIsPreparingLetter] = useState(false);
   const preparingLetterRef = useRef(false);
 
   function removeMailboxOptionFromLatestMessage() {
@@ -68,6 +69,9 @@ export function useLetterFlow({
     const letter = gs.letterHistory.find((item) => item.id === targetId && item.from === 'linShen');
     if (!letter) {
       setShowLetter(false);
+      if (preparingLetterRef.current) {
+        setShowLetterBox(true);
+      }
       return;
     }
     setLetterContent(letter.content);
@@ -140,6 +144,7 @@ export function useLetterFlow({
   async function prepareIncomingLetter(playerReply: string | null, retryCount = 0) {
     if (preparingLetterRef.current || gameStateRef.current.mailbox.pending) return;
     preparingLetterRef.current = true;
+    setIsPreparingLetter(true);
     try {
       const gs = gameStateRef.current;
       const res = await fetch('/api/letter', {
@@ -170,6 +175,7 @@ export function useLetterFlow({
       setTimeout(() => setSaveToast(''), 4000);
     } finally {
       preparingLetterRef.current = false;
+      setIsPreparingLetter(false);
     }
   }
 
@@ -212,6 +218,15 @@ export function useLetterFlow({
     setShowLetter(false);
     if (activeLetterWasUnread) {
       setActiveLetterWasUnread(false);
+      const closeMsg: ChatMessage = {
+        role: 'system',
+        content: '📜 你将来信收好，纸页上的墨迹仍像余温一样留在指尖。',
+        timestamp: Date.now(),
+      };
+      const nextMessages = [...messagesRef.current, closeMsg];
+      messagesRef.current = nextMessages;
+      setMessages(nextMessages);
+      saveChatHistory(nextMessages);
       setTimeout(() => {
         continueNarration(buildLetterContinuationPrompt(gameStateRef.current, 'read'));
       }, 800);
@@ -235,6 +250,7 @@ export function useLetterFlow({
     showLetter,
     letterContent,
     letterLoading,
+    isPreparingLetter,
     showMailbox,
     setShowMailbox,
     showLetterBox,

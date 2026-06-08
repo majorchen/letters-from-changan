@@ -47,6 +47,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     showLetter,
     letterContent,
     letterLoading,
+    isPreparingLetter,
     showMailbox,
     setShowMailbox,
     showLetterBox,
@@ -249,6 +250,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         <LetterBox
           letters={gameState.letterHistory}
           pending={gameState.mailbox.pending}
+          isPreparingLetter={isPreparingLetter}
           onClose={() => setShowLetterBox(false)}
           onOpenLetter={(id) => {
             setShowLetterBox(false);

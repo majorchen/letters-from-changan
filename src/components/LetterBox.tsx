@@ -7,21 +7,26 @@ interface Props {
   onClose: () => void;
   onOpenLetter: (id: string) => void;
   pending?: PendingLetter;
+  isPreparingLetter?: boolean;
 }
 
-export default function LetterBox({ letters, onClose, onOpenLetter, pending }: Props) {
+export default function LetterBox({ letters, onClose, onOpenLetter, pending, isPreparingLetter }: Props) {
+  const isLetterArriving = Boolean(pending || isPreparingLetter);
+
   if (letters.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
         <div className="relative letter-paper rounded-lg p-8 max-w-md mx-4 text-center">
           <div className="font-handwriting text-xl leading-relaxed text-amber-900/75">
-            长安万户灯，尚无一纸来。
+            {isLetterArriving ? '有一封信正在穿过千年，尚未抵达。' : '长安万户灯，尚无一纸来。'}
           </div>
-          <div className="text-amber-700/45 text-sm mt-3">信匣里还没有留下字迹</div>
-          {pending && (
+          <div className="text-amber-700/45 text-sm mt-3">
+            {isLetterArriving ? '稍等片刻，信匣会自己亮起。' : '信匣里还没有留下字迹'}
+          </div>
+          {isLetterArriving && (
             <div className="mt-5 border-t border-amber-900/15 pt-4 text-sm leading-6 text-amber-800/55">
-              林深的回信正在穿越途中……
+              林深的来信正在抵达长安...
             </div>
           )}
           <button onClick={onClose} className="mt-4 px-4 py-2 text-amber-800/50 text-sm hover:text-amber-800/80">
@@ -39,7 +44,6 @@ export default function LetterBox({ letters, onClose, onOpenLetter, pending }: P
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative z-10 flex flex-col h-full max-w-lg mx-auto w-full">
-        {/* Header */}
         <div className="flex-none px-6 pt-6 pb-3 flex items-center justify-between">
           <h2 className="font-handwriting text-2xl text-amber-300/80">信匣</h2>
           <button onClick={onClose} className="text-amber-500/40 hover:text-amber-400 text-sm">
@@ -47,11 +51,10 @@ export default function LetterBox({ letters, onClose, onOpenLetter, pending }: P
           </button>
         </div>
 
-        {/* Letters list */}
         <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 chat-scroll">
-          {pending && (
+          {isLetterArriving && (
             <div className="px-2 py-3 text-center text-xs leading-6 text-amber-300/45">
-              林深的回信正在穿越途中……
+              林深的来信正在抵达长安...
             </div>
           )}
           {sorted.map((letter) => {
@@ -63,7 +66,6 @@ export default function LetterBox({ letters, onClose, onOpenLetter, pending }: P
             return (
               <div key={letter.id} className="animate-fade-in-up">
                 <div className={`letter-paper rounded-lg p-5 shadow-lg ${isUnread ? 'ring-1 ring-amber-500/30' : ''}`}>
-                  {/* Sender info */}
                   <div className="flex items-center justify-between mb-3 border-b border-amber-800/15 pb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-base">{isFromLinShen ? '📨' : '✉️'}</span>
@@ -83,14 +85,11 @@ export default function LetterBox({ letters, onClose, onOpenLetter, pending }: P
                       轻触启封
                     </button>
                   ) : (
-                    <>
-                      <div className="font-handwriting text-lg leading-relaxed text-amber-900/85 whitespace-pre-wrap">
-                        {letter.content}
-                      </div>
-                    </>
+                    <div className="font-handwriting text-lg leading-relaxed text-amber-900/85 whitespace-pre-wrap">
+                      {letter.content}
+                    </div>
                   )}
 
-                  {/* Seal for LinShen's letters */}
                   {isFromLinShen && (
                     <div className="text-right mt-3">
                       <span className="seal-stamp font-handwriting text-2xl select-none inline-block">印</span>
