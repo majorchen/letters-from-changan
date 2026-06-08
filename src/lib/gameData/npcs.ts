@@ -1,7 +1,7 @@
 export const CORE_VISUAL_PROFILES: Record<string, string> = {
   // 核心 NPC
   merchant: 'A lean Chinese merchant in his early thirties, warm tan skin, narrow observant eyes, neat short moustache, dark hair in a practical topknot, muted rust-brown Tang robe, indigo sash, worn leather satchel.',
-  musician: 'A young Chinese musician in their mid twenties, oval face, calm dark eyes, long black hair tied with a faded red ribbon, moss-green Tang robe, carrying an old wooden pipa.',
+  musician: 'A young Chinese female pipa musician in her mid twenties, oval face with soft Tang-style makeup, calm dark eyes, long black hair in a high half-up Tang bun with a faded red ribbon and small brass hairpin, moss-green ruqun with an ivory inner layer and amber silk shawl, carrying an old wooden pipa.',
   wanderer: 'A weathered Chinese wanderer around thirty, angular face, small scar through the left eyebrow, black hair in a high knot, charcoal Tang travel robe, short saber with a worn lacquered sheath.',
   scholar: 'A slender Chinese scholar in his late twenties, pale warm complexion, straight brows, thoughtful dark eyes, black hair under a simple cloth headpiece, ivory Tang robe with an ink-blue outer layer.',
   王掌柜: 'A broad middle-aged Chinese innkeeper, round friendly face, short greying beard, lively eyes, dark ochre Tang robe, brown apron, wooden tally slips at his belt.',
