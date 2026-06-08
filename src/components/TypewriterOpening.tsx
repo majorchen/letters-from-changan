@@ -26,9 +26,9 @@ export default function TypewriterOpening({ sceneImage, typewriterText }: Props)
       )}
       <div className="absolute inset-0 flex items-end pb-24 px-6">
         <div className="max-w-lg mx-auto w-full">
-          <div className="text-amber-100/80 text-sm leading-relaxed whitespace-pre-wrap">
+          <div className="text-amber-100/80 text-lg leading-8 whitespace-pre-wrap">
             {typewriterText}
-            <span className="inline-block w-0.5 h-4 bg-amber-400/60 ml-0.5 animate-pulse align-text-bottom" />
+            <span className="inline-block w-0.5 h-6 bg-amber-400/60 ml-0.5 animate-pulse align-text-bottom" />
           </div>
         </div>
       </div>
