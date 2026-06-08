@@ -20,7 +20,6 @@ interface UseGameChatOptions {
   setInput: Dispatch<SetStateAction<string>>;
   onStateChange: (state: PlayerState) => void;
   prepareIncomingLetter: (playerReply: string | null) => void;
-  setShowMailbox: Dispatch<SetStateAction<boolean>>;
 }
 
 export function useGameChat({
@@ -30,7 +29,6 @@ export function useGameChat({
   setInput,
   onStateChange,
   prepareIncomingLetter,
-  setShowMailbox,
 }: UseGameChatOptions) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [earlyOptions, setEarlyOptions] = useState<string[]>([]);
@@ -145,6 +143,10 @@ export function useGameChat({
         (event) => {
           if (event.type === 'narrative') {
             assistantMsg.content = sanitizeResponse(event.content, gs);
+            if (!hasDiscoveredMailbox(gs) && /(陶罐|陶器|信匣|邮箱|金光|发光)/.test(assistantMsg.content)) {
+              suppressEarlyOptions = true;
+              setEarlyOptions([]);
+            }
             setMessages([...newMessages, { ...assistantMsg }]);
             return;
           }
@@ -246,7 +248,6 @@ export function useGameChat({
         setEarlyOptions([]);
         activeRequestRef.current = false;
         setIsStreaming(false);
-        setShowMailbox(true);
         return;
       }
 

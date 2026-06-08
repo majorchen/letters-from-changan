@@ -49,7 +49,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     letterLoading,
     isPreparingLetter,
     showMailbox,
-    setShowMailbox,
     showLetterBox,
     setShowLetterBox,
     openLetter,
@@ -85,7 +84,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setInput,
     onStateChange,
     prepareIncomingLetter,
-    setShowMailbox,
   });
 
   const { shareImageUrl, setShareImageUrl, handleShareCard } = useShareCard({
@@ -215,19 +213,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
       />
 
       <ChatDisplay messages={messages} isStreaming={isStreaming} scrollRef={scrollRef} />
-
-      {/* Mailbox notification */}
-      {showMailbox && (
-        <div className="px-5 pb-2 z-10">
-          <button
-            onClick={() => void openLetter()}
-            className="w-full py-3 rounded-xl bg-amber-700/15 border border-amber-500/20 text-amber-300/80 text-sm animate-pulse-glow flex items-center justify-center gap-2"
-          >
-            <span className="text-lg">📮</span>
-            邮箱在发光...
-          </button>
-        </div>
-      )}
 
       <OptionPanel
         gameState={gameState}
