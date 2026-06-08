@@ -19,7 +19,6 @@ import { useGameChat } from './hooks/useGameChat';
 import { useLetterFlow } from './hooks/useLetterFlow';
 import { useShareCard } from './hooks/useShareCard';
 import { useOpeningFlow } from './hooks/useOpeningFlow';
-import { useStorageHealth } from './hooks/useStorageHealth';
 
 interface Props {
   gameState: PlayerState;
@@ -30,7 +29,6 @@ interface Props {
 export default function GameScreen({ gameState, onStateChange, onExit }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [saveToast, setSaveToast] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Always-fresh refs to avoid React closure staleness in async callbacks
@@ -64,7 +62,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     messagesRef,
     setMessages,
     onStateChange,
-    setSaveToast,
+    setSaveToast: () => {},
     continueNarration: (prompt) => {
       sendMessage(prompt, { visibleUser: false });
     },
@@ -74,7 +72,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     isStreaming,
     sceneImage,
     setSceneImage,
-    imageLoading,
     ending,
     lastGoodImageRef,
     sendMessage,
@@ -88,19 +85,12 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
     setShowMailbox,
   });
 
-  const { shareImageUrl, shareOpen, closeShareCard, handleShareCard } = useShareCard({
+  const { shareImageUrl, setShareImageUrl, handleShareCard } = useShareCard({
     gameState,
     messages,
     activeLetterContent: showLetter ? letterContent : '',
     roleName: ROLES[gameState.role]?.name || '旅人',
   });
-
-  const showStorageWarning = useCallback((message: string) => {
-    setSaveToast(message);
-    window.setTimeout(() => setSaveToast(''), 4200);
-  }, []);
-
-  useStorageHealth({ onWarning: showStorageWarning });
 
   const { gamePhase, typewriterText, handlePrologueComplete } = useOpeningFlow({
     role: gameState.role,
@@ -206,16 +196,6 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-stone-950" />
         </div>
       )}
-      {saveToast && (
-        <div className="absolute inset-x-0 top-4 z-30 text-center">
-          <span className="rounded-full border border-amber-500/15 bg-stone-950/70 px-3 py-1 text-xs text-amber-200/70">{saveToast}</span>
-        </div>
-      )}
-      {imageLoading && (
-        <div className="absolute inset-x-0 top-4 z-30 text-center">
-          <span className="text-amber-600/20 text-xs">场景浮现中...</span>
-        </div>
-      )}
       <GameHeader
         location={gameState.location}
         roleName={ROLES[gameState.role]?.name || '旅人'}
@@ -269,7 +249,7 @@ export default function GameScreen({ gameState, onStateChange, onExit }: Props) 
         />
       )}
 
-      {shareOpen && shareImageUrl && <ShareModal imageUrl={shareImageUrl} onClose={closeShareCard} />}
+      {shareImageUrl && <ShareModal imageUrl={shareImageUrl} onClose={() => setShareImageUrl('')} />}
       {ending && (
         <EndingSequence
           title={ending.title}

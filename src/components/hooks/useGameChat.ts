@@ -31,7 +31,6 @@ export function useGameChat({
 }: UseGameChatOptions) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
   const [ending, setEnding] = useState<{ title: string; scenes: string[] } | null>(null);
   const lastGoodImageRef = useRef<string | null>(null);
   const endingRef = useRef<typeof ending>(null);
@@ -75,7 +74,6 @@ export function useGameChat({
   }
 
   async function generateSceneImage(scene: string) {
-    setImageLoading(true);
     try {
       const res = await fetch('/api/image', {
         method: 'POST',
@@ -88,7 +86,6 @@ export function useGameChat({
         persistLatestSceneImage(data.url);
       }
     } catch { /* silently fail - keep current image */ }
-    setImageLoading(false);
   }
 
   async function sendMessage(text: string, options: { visibleUser?: boolean } = {}) {
@@ -244,7 +241,6 @@ export function useGameChat({
     isStreaming,
     sceneImage,
     setSceneImage,
-    imageLoading,
     ending,
     lastGoodImageRef,
     sendMessage,
