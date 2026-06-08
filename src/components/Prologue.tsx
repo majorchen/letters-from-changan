@@ -38,7 +38,14 @@ export default function Prologue({ role, onComplete }: Props) {
   // Preload image
   useEffect(() => {
     const img = new window.Image();
-    img.onload = () => setImgLoaded(true);
+    img.decoding = 'async';
+    img.onload = () => {
+      if ('decode' in img) {
+        img.decode().then(() => setImgLoaded(true)).catch(() => setImgLoaded(true));
+        return;
+      }
+      setImgLoaded(true);
+    };
     img.src = bgUrl;
   }, [bgUrl]);
 

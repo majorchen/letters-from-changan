@@ -32,6 +32,16 @@ export function recoverNarrativeText(text: string): string {
   return cleanNarrative(beforeOptions);
 }
 
+export function cleanStreamingNarrative(text: string): string {
+  const structuredStart = text.match(
+    /(?:^|\n)\s*(?:\[STATE\]|LOCATION\s*[:：]|NPCS\s*[:：]|EVENTS\s*[:：]|SUMMARY\s*[:：]|NPC_MEMORY\s*[:：]|VISUAL_PROFILE\s*[:：]|EVENT_VERSION\s*[:：]|SECOND_CORRESPONDENT\s*[:：]|VISUAL\s*[:：]|INPUT\s*[:：]|MAILBOX\s*[:：])/i,
+  );
+  const visibleText = structuredStart?.index !== undefined
+    ? text.slice(0, structuredStart.index)
+    : text;
+  return cleanNarrative(visibleText);
+}
+
 // Extract option texts from raw AI content
 export function extractOptions(text: string): string[] {
   // Support both strict and loose spacing in tags
