@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type
 import type { ChatMessage } from '@/lib/gameState';
 import { saveChatHistory, saveGameState, updateChapter } from '@/lib/gameState';
 import { ensureMailboxOption, hasDiscoveredMailbox, NEW_LETTER_OPTION, shouldForceFirstMailbox, shouldPrepareActiveLetter } from '@/lib/game/mailboxLogic';
-import { cleanNarrative, cleanStreamingNarrative, extractOptions, parseNarrativeState, recoverNarrativeText } from '@/lib/game/narrativeParsing';
+import { recoverNarrativeText } from '@/lib/game/narrativeParsing';
 import { dedupeOptions, fallbackOptions, getContradictionOption, withContradictionOption } from '@/lib/game/optionLogic';
 import { sanitizeOptions, sanitizeResponse, sanitizeState, stripScenePromptLeak } from '@/lib/game/responseSanitizers';
-import { extractScenePrompt, fallbackSceneFromNarrative, LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
+import { fallbackSceneFromNarrative, LOCATION_KEYWORDS, visualProfilesForScene } from '@/lib/game/sceneHelpers';
 import { streamChat } from '@/lib/game/chatStream';
 import type { PlayerState } from '@/lib/prompts';
 import { IMAGE_CONSTRAINT_SUFFIX, IMAGE_STYLE_PREFIX } from '@/lib/prompts';
+import { parseAiTurn } from '@/lib/game/aiTurnParser';
 
 interface UseGameChatOptions {
   gameStateRef: MutableRefObject<PlayerState>;
@@ -115,9 +116,10 @@ export function useGameChat({
       const fullContent = await streamChat(
         { messages: apiMessages, playerState: playerStateForApi },
         (streamedContent) => {
-          assistantMsg.content = sanitizeResponse(cleanStreamingNarrative(stripScenePromptLeak(streamedContent)), gs);
+          const partialTurn = parseAiTurn(stripScenePromptLeak(streamedContent), { partial: true });
+          assistantMsg.content = sanitizeResponse(partialTurn.narrative, gs);
           setMessages([...newMessages, { ...assistantMsg }]);
-          const streamedSceneDesc = !sceneImageRequested ? extractScenePrompt(streamedContent) : null;
+          const streamedSceneDesc = !sceneImageRequested ? partialTurn.scenePrompt : null;
           if (streamedSceneDesc) {
             sceneImageRequested = true;
             void generateSceneImage(
@@ -128,22 +130,23 @@ export function useGameChat({
       );
 
       const rawContent = fullContent;
-      let cleanContent = sanitizeResponse(cleanNarrative(rawContent), gs);
+      const parsedTurn = parseAiTurn(rawContent);
+      let cleanContent = sanitizeResponse(parsedTurn.narrative, gs);
       if (!cleanContent) {
         cleanContent = sanitizeResponse(recoverNarrativeText(rawContent), gs);
       }
       if (!cleanContent) {
         cleanContent = '你一时没有说话，周围的喧声重新涌了上来。';
       }
-      const narrativeState = parseNarrativeState(rawContent);
+      const narrativeState = parsedTurn.state;
       if (narrativeState) sanitizeState(narrativeState, gs);
       if (narrativeState?.visualCue === 'ending' && !endingRef.current) {
         void prepareEnding();
       }
-      const mailboxTriggered = rawContent.includes('[MAILBOX]');
+      const mailboxTriggered = parsedTurn.mailboxTriggered;
       const updated = updateChapter(gs, rawContent, narrativeState);
 
-      const sceneDesc = extractScenePrompt(rawContent);
+      const sceneDesc = parsedTurn.scenePrompt;
       if (sceneDesc) {
         if (!sceneImageRequested) {
           sceneImageRequested = true;
@@ -205,7 +208,7 @@ export function useGameChat({
         return;
       }
 
-      const extractedOptions = sanitizeOptions(extractOptions(rawContent), msgs);
+      const extractedOptions = sanitizeOptions(parsedTurn.options, msgs);
       const contextualFallback = fallbackOptions(updated, rawContent, msgs, text);
       const modelOptions = dedupeOptions(extractedOptions, msgs, 'model');
       const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
