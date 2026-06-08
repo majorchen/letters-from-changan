@@ -39,6 +39,7 @@ export function useGameChat({
   const lastGoodImageRef = useRef<string | null>(null);
   const endingRef = useRef<typeof ending>(null);
   const queuedOptionRef = useRef<string | null>(null);
+  const activeRequestRef = useRef(false);
 
   useEffect(() => {
     endingRef.current = ending;
@@ -106,7 +107,14 @@ export function useGameChat({
     });
   }
 
+  function uniqueOptions(options: string[]): string[] {
+    return Array.from(new Set(options.map((option) => option.trim()).filter(Boolean))).slice(0, 4);
+  }
+
   async function sendMessage(text: string, options: { visibleUser?: boolean } = {}) {
+    if (activeRequestRef.current) return;
+    activeRequestRef.current = true;
+
     const gs = gameStateRef.current;
     const msgs = messagesRef.current;
     const visibleUser = options.visibleUser !== false;
@@ -236,6 +244,7 @@ export function useGameChat({
         prepareIncomingLetter(null);
         queuedOptionRef.current = null;
         setEarlyOptions([]);
+        activeRequestRef.current = false;
         setIsStreaming(false);
         setShowMailbox(true);
         return;
@@ -244,7 +253,8 @@ export function useGameChat({
       const extractedOptions = sanitizeOptions(parsedTurn.options, msgs);
       const contextualFallback = fallbackOptions(updated, rawContent, msgs, text);
       const modelOptions = dedupeOptions(extractedOptions, msgs, 'model');
-      if (modelOptions.length === 0 && !updated.awaitingFreeInput) {
+      const usingFallbackOptions = modelOptions.length === 0;
+      if (usingFallbackOptions && !updated.awaitingFreeInput) {
         logOptionFallbackDiagnostics(rawContent, parsedTurn.options, extractedOptions, parsedTurn.warnings);
       }
       const optionsWithFallback = modelOptions.length > 0 ? modelOptions : contextualFallback;
@@ -252,18 +262,25 @@ export function useGameChat({
         && updated.turnCount >= ENDING_GATE_TURN
         && !endingRef.current
         && narrativeState?.visualCue !== 'ending';
-      const opts = updated.awaitingFreeInput
+      let opts = updated.awaitingFreeInput
         ? []
-        : dedupeOptions(
-          ensureMailboxOption(
+        : (() => {
+          const baseOptions = ensureMailboxOption(
             shouldOfferEnding
               ? [ENDING_OPTION, ...withContradictionOption(optionsWithFallback, getContradictionOption(updated))]
               : withContradictionOption(optionsWithFallback, getContradictionOption(updated)),
             updated,
-          ),
-          msgs,
-          'final',
-        );
+          );
+          return usingFallbackOptions
+            ? uniqueOptions(baseOptions).slice(0, 3)
+            : dedupeOptions(baseOptions, msgs, 'final');
+        })();
+      if (!updated.awaitingFreeInput && opts.length < 2) {
+        const supplementedOptions = [...opts, ...optionsWithFallback, ...contextualFallback];
+        opts = usingFallbackOptions
+          ? uniqueOptions(supplementedOptions).slice(0, 3)
+          : dedupeOptions(supplementedOptions, msgs, 'final').slice(0, 3);
+      }
       if (opts.includes(NEW_LETTER_OPTION)) {
         updated.mailbox = {
           ...updated.mailbox,
@@ -291,14 +308,18 @@ export function useGameChat({
       setIsStreaming(false);
       if (queuedOption) {
         window.setTimeout(() => {
+          activeRequestRef.current = false;
           void sendMessage(queuedOption);
         }, 0);
+        return;
       }
+      activeRequestRef.current = false;
     } catch (err) {
       assistantMsg.content = '（长安城的喧嚣声突然安静了一瞬...请再试一次）';
       setMessages([...newMessages, assistantMsg]);
       queuedOptionRef.current = null;
       setEarlyOptions([]);
+      activeRequestRef.current = false;
       setIsStreaming(false);
       console.error(err);
     }
@@ -312,6 +333,7 @@ export function useGameChat({
     lastGoodImageRef,
     earlyOptions,
     queueStreamingOption: (option: string) => {
+      if (queuedOptionRef.current === option) return;
       queuedOptionRef.current = option;
       setEarlyOptions([]);
     },

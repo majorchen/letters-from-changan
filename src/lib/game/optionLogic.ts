@@ -83,6 +83,17 @@ function contextualFallbackOptions(state: PlayerState, content: string, playerIn
   return options.slice(0, 3);
 }
 
+function supplementFallbackOptions(options: string[], messages: ChatMessage[]): string[] {
+  const recent = recentAssistantOptions(messages);
+  const supplemented = [...options];
+  const pool = FALLBACK_POOL.filter(opt => !recent.some(r => optionSimilarity(r, opt) > 0.8));
+  for (const option of [...pool, ...FALLBACK_POOL]) {
+    uniquePush(supplemented, option);
+    if (supplemented.length >= 3) break;
+  }
+  return supplemented.slice(0, 3);
+}
+
 export function fallbackOptions(state: PlayerState, content: string, messages: ChatMessage[], playerInput = ''): string[] {
   const contradictionOption = getContradictionOption(state);
   const context = `${playerInput}\n${content}`;
@@ -93,17 +104,18 @@ export function fallbackOptions(state: PlayerState, content: string, messages: C
 
   const contextualOptions = contextualFallbackOptions(state, content, playerInput);
   if (contextualOptions.length > 0) {
-    return withContradictionOption(contextualOptions, contradictionOption);
+    return withContradictionOption(supplementFallbackOptions(contextualOptions, messages), contradictionOption);
   }
 
   // Pick a fallback that hasn't been used recently, with randomness
   const recent = recentAssistantOptions(messages);
   const pool = FALLBACK_POOL.filter(opt => !recent.some(r => optionSimilarity(r, opt) > 0.8));
-  const fallback = pool.length > 0 
-    ? pool[Math.floor(Math.random() * pool.length)] 
+  const fallback = pool.length > 0
+    ? pool[Math.floor(Math.random() * pool.length)]
     : FALLBACK_POOL[Math.floor(Math.random() * FALLBACK_POOL.length)];
+  const secondFallback = (pool.find((option) => option !== fallback) || FALLBACK_POOL.find((option) => option !== fallback));
 
-  return withContradictionOption([fallback], contradictionOption);
+  return withContradictionOption(secondFallback ? [fallback, secondFallback] : [fallback], contradictionOption);
 }
 
 function normalizeOptionForComparison(option: string): string {
