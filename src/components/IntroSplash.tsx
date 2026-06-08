@@ -40,7 +40,6 @@ function preloadImage(src: string): Promise<void> {
 export default function IntroSplash({ onComplete }: Props) {
   const completedRef = useRef(false);
   const [dotIndex, setDotIndex] = useState(0);
-  const [showLoadingLine, setShowLoadingLine] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,16 +63,10 @@ export default function IntroSplash({ onComplete }: Props) {
   }, [onComplete]);
 
   useEffect(() => {
-    if (!showLoadingLine) return;
     const timer = window.setInterval(() => {
       setDotIndex((current) => (current + 1) % LOADING_DOTS.length);
     }, 420);
     return () => window.clearInterval(timer);
-  }, [showLoadingLine]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setShowLoadingLine(true), 1150);
-    return () => window.clearTimeout(timer);
   }, []);
 
   return (
@@ -94,15 +87,13 @@ export default function IntroSplash({ onComplete }: Props) {
           </div>
         </div>
 
-        {showLoadingLine && (
-          <div className="mt-9 flex animate-fade-in-up items-center justify-center gap-2 text-sm tracking-[0.22em] text-amber-300/80" style={{ animationFillMode: 'both' }}>
-            <span className="text-amber-400/55">🐎</span>
-            <span>
-              正在抵达长安
-              <span className="inline-block w-6 text-left">{LOADING_DOTS[dotIndex]}</span>
-            </span>
-          </div>
-        )}
+        <div className="mt-9 flex animate-fade-in-up items-center justify-center gap-2 text-sm tracking-[0.22em] text-amber-300/80" style={{ animationDelay: '1.05s', animationFillMode: 'both' }}>
+          <span className="text-amber-400/55">🐎</span>
+          <span>
+            正在抵达长安
+            <span className="inline-block w-6 text-left">{LOADING_DOTS[dotIndex]}</span>
+          </span>
+        </div>
       </div>
     </div>
   );
