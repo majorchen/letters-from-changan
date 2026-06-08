@@ -28,12 +28,12 @@ function isGenericOption(option: string): boolean {
 }
 
 const FALLBACK_POOL = [
-  '静观其变...',
-  '四处打探下...',
-  '留意周围动静...',
-  '暂且按兵不动...',
-  '看看还有什么细节...',
-  '寻个由头再问问...',
+  '留意周围人的反应',
+  '检查眼前最反常的细节',
+  '暂且按兵不动，观察变化',
+  '换个方向打听消息',
+  '记下异常，继续前行',
+  '从人群边缘绕过去',
 ];
 
 function uniquePush(items: string[], item: string) {
@@ -42,16 +42,24 @@ function uniquePush(items: string[], item: string) {
   items.push(normalized);
 }
 
-function contextualFallbackOptions(state: PlayerState, content: string, playerInput = ''): string[] {
-  const context = `${playerInput}\n${content}`;
+function currentTurnContext(content: string): string {
+  return content
+    .replace(/\[OPTIONS_JSON\][\s\S]*$/i, '')
+    .replace(/\[SCENE:[\s\S]*$/i, '')
+    .replace(/\[STATE\][\s\S]*$/i, '')
+    .trim();
+}
+
+function contextualFallbackOptions(state: PlayerState, content: string): string[] {
+  const context = currentTurnContext(content);
   const options: string[] = [];
-  const knownNpc = (state.knownNPCs || []).find((npc) => npc && context.includes(npc));
   const npcMatch = context.match(/(?:王掌柜|阿依|李无名|守门兵|驿卒|掌柜|书生|胡商|老门卒|乐师|军士)/);
-  const npc = knownNpc || npcMatch?.[0];
+  const knownNpc = (state.knownNPCs || []).find((npc) => npc && context.includes(npc));
+  const npc = npcMatch?.[0] || knownNpc;
 
   if (npc) {
-    uniquePush(options, `追问${npc}刚才那句话的意思`);
-    uniquePush(options, `观察${npc}的神色变化`);
+    uniquePush(options, `继续追问${npc}的说法`);
+    uniquePush(options, `留意${npc}没有说出口的细节`);
   }
   if (/(陶罐|陶器|信匣|邮箱|金光|发光)/.test(context)) {
     uniquePush(options, '靠近那只发光的唐三彩陶器');
@@ -61,9 +69,9 @@ function contextualFallbackOptions(state: PlayerState, content: string, playerIn
     uniquePush(options, '压低声音打听军报来处');
     uniquePush(options, '避开人群跟上那名驿卒');
   }
-  if (/(账本|价格|货|西市|铺子|掌柜|买卖)/.test(context)) {
-    uniquePush(options, '拿出账本核对市价异动');
-    uniquePush(options, '去西市找熟人打听行情');
+  if (/(账本|价格|货|西市|市集|铺子|掌柜|买卖)/.test(context)) {
+    uniquePush(options, '询问市价为何突然异动');
+    uniquePush(options, '留意铺子间的异常传言');
   }
   if (/(琴|琵琶|乐声|曲子|酒肆|歌)/.test(context)) {
     uniquePush(options, '走近酒肆听清那段旋律');
@@ -78,8 +86,9 @@ function contextualFallbackOptions(state: PlayerState, content: string, playerIn
     uniquePush(options, '绕进巷口试探是否有人跟随');
   }
 
-  if (state.location) uniquePush(options, `在${state.location}再查一处细节`);
-  uniquePush(options, '换个由头继续追问');
+  if (options.length === 0 && state.location) {
+    uniquePush(options, `在${state.location}留意异常动静`);
+  }
   return options.slice(0, 3);
 }
 
@@ -102,7 +111,7 @@ export function fallbackOptions(state: PlayerState, content: string, messages: C
     return ['请王掌柜安排一间客房', '先把行李放进房里'];
   }
 
-  const contextualOptions = contextualFallbackOptions(state, content, playerInput);
+  const contextualOptions = contextualFallbackOptions(state, content);
   if (contextualOptions.length > 0) {
     return withContradictionOption(supplementFallbackOptions(contextualOptions, messages), contradictionOption);
   }
