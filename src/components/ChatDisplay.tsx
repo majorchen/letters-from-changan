@@ -12,7 +12,7 @@ export default function ChatDisplay({ messages, isStreaming, scrollRef }: ChatDi
     <div ref={scrollRef} className="flex-1 overflow-y-auto chat-scroll px-6 pb-4 z-10 relative text-fade-mask">
       <div className="h-[28vh]" />
 
-      <div className="max-w-lg mx-auto space-y-5">
+      <div className="max-w-lg mx-auto space-y-6">
         {messages.filter((msg) => !msg.hidden).map((msg, i) => (
           <div
             key={i}
@@ -21,11 +21,11 @@ export default function ChatDisplay({ messages, isStreaming, scrollRef }: ChatDi
             }`}
           >
             {msg.role === 'system' ? (
-              <span className="text-amber-500/30 text-xs">{msg.content}</span>
+              <span className="text-amber-500/30 text-sm">{msg.content}</span>
             ) : msg.role === 'user' ? (
-              <span className="text-amber-500/50 text-sm">{msg.content}</span>
+              <span className="text-amber-500/50 text-lg leading-8">{msg.content}</span>
             ) : (
-              <p className="text-amber-100/70 text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              <p className="text-amber-100/70 text-lg leading-8 whitespace-pre-wrap">{msg.content}</p>
             )}
           </div>
         ))}
